@@ -92,10 +92,32 @@ impl TypstWorld {
     }
 
     /// Resolve a FileId to an absolute path on disk.
+    /// Enforces a sandbox: the resolved path must stay inside `self.root`.
     fn resolve_path(&self, id: FileId) -> Result<PathBuf, FileError> {
-        id.vpath()
+        let resolved = id
+            .vpath()
             .resolve(&self.root)
-            .ok_or(FileError::AccessDenied)
+            .ok_or(FileError::AccessDenied)?;
+
+        // Enforce sandbox: resolved path must stay inside root
+        let is_inside = if resolved.exists() {
+            resolved
+                .canonicalize()
+                .ok()
+                .and_then(|c| self.root.canonicalize().ok().map(|r| c.starts_with(r)))
+                .unwrap_or(false)
+        } else {
+            // File doesn't exist yet or can't be canonicalized — check component-wise
+            !resolved
+                .components()
+                .any(|c| c == std::path::Component::ParentDir)
+        };
+
+        if !is_inside {
+            return Err(FileError::AccessDenied);
+        }
+
+        Ok(resolved)
     }
 }
 
@@ -132,7 +154,8 @@ impl World for TypstWorld {
     fn today(&self, offset: Option<i64>) -> Option<Datetime> {
         let now = if let Some(hours) = offset {
             let utc = chrono::Utc::now();
-            let offset = chrono::FixedOffset::east_opt((hours as i32) * 3600)?;
+            let secs = hours.checked_mul(3600).and_then(|s| i32::try_from(s).ok())?;
+            let offset = chrono::FixedOffset::east_opt(secs)?;
             utc.with_timezone(&offset).naive_local()
         } else {
             chrono::Local::now().naive_local()
@@ -247,6 +270,16 @@ pub async fn export_project(
     out_path: String,
 ) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
+        let out = PathBuf::from(&out_path);
+        if let Some(parent) = out.parent() {
+            if !parent.exists() {
+                return Err(format!(
+                    "Export directory does not exist: {}",
+                    parent.display()
+                ));
+            }
+        }
+
         let root = PathBuf::from(&tmp_path);
         let world = TypstWorld::new(root, &entry_file);
 
@@ -258,8 +291,6 @@ pub async fn export_project(
                 let msgs: Vec<String> = diags.iter().map(|d| d.message.to_string()).collect();
                 format!("Compilation errors: {}", msgs.join("; "))
             })?;
-
-        let out = PathBuf::from(&out_path);
 
         match format.as_str() {
             "pdf" => {
