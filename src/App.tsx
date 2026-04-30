@@ -1,5 +1,5 @@
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Sidebar } from './components/Sidebar'
 import { Explorer } from './components/Explorer/Explorer'
 import { EditorPanel } from './components/Editor/EditorPanel'
@@ -9,7 +9,27 @@ import { ProgressModal } from './components/ProgressModal'
 import { useAppStore } from './store/appStore'
 import { onProgress } from './tauri/commands'
 
+const PANEL_SIZES_KEY = 'typst-editor-panel-sizes'
+const PANEL_DEFAULTS = { explorer: 20, preview: 35, diagnostics: 25 }
+
+function loadPanelSizes() {
+  try {
+    const stored = localStorage.getItem(PANEL_SIZES_KEY)
+    return stored ? { ...PANEL_DEFAULTS, ...JSON.parse(stored) } : PANEL_DEFAULTS
+  } catch {
+    return PANEL_DEFAULTS
+  }
+}
+
+function savePanelSize(key: keyof typeof PANEL_DEFAULTS, value: number) {
+  try {
+    const current = loadPanelSizes()
+    localStorage.setItem(PANEL_SIZES_KEY, JSON.stringify({ ...current, [key]: Math.round(value) }))
+  } catch {}
+}
+
 export default function App() {
+  const [panelSizes] = useState(loadPanelSizes)
   const { explorerVisible, previewVisible, diagnosticsVisible, setProgress } = useAppStore()
 
   useEffect(() => {
@@ -44,7 +64,11 @@ export default function App() {
           <Panel defaultSize={75} minSize={20}>
             <PanelGroup orientation="horizontal" resizeTargetMinimumSize={{ coarse: 20, fine: 12 }}>
               {explorerVisible && (
-                <Panel defaultSize={20} minSize={10}>
+                <Panel
+                  defaultSize={panelSizes.explorer}
+                  minSize={10}
+                  onResize={(s) => savePanelSize('explorer', s.asPercentage)}
+                >
                   <Explorer />
                 </Panel>
               )}
@@ -60,7 +84,11 @@ export default function App() {
                 <PanelResizeHandle className="w-[5px] bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
               )}
               {previewVisible && (
-                <Panel defaultSize={35} minSize={10}>
+                <Panel
+                  defaultSize={panelSizes.preview}
+                  minSize={10}
+                  onResize={(s) => savePanelSize('preview', s.asPercentage)}
+                >
                   <PreviewPanel />
                 </Panel>
               )}
@@ -71,7 +99,11 @@ export default function App() {
             <PanelResizeHandle className="h-[5px] bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
           )}
           {diagnosticsVisible && (
-            <Panel defaultSize={25} minSize={10}>
+            <Panel
+              defaultSize={panelSizes.diagnostics}
+              minSize={10}
+              onResize={(s) => savePanelSize('diagnostics', s.asPercentage)}
+            >
               <DiagnosticsPanel />
             </Panel>
           )}
