@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::command;
 
-fn safe_join(root: &std::path::Path, rel: &str) -> Result<std::path::PathBuf, String> {
+pub(crate) fn safe_join(root: &std::path::Path, rel: &str) -> Result<std::path::PathBuf, String> {
     let mut result = root.to_path_buf();
     for component in std::path::Path::new(rel).components() {
         match component {
