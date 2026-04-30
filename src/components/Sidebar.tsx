@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { FaFolderPlus, FaFolderOpen, FaFileExport, FaFilePdf, FaFileImage, FaVectorSquare, FaTerminal } from 'react-icons/fa6'
 import { useAppStore } from '../store/appStore'
-import { newProject, openProject, exportProject } from '../tauri/commands'
+import { newProject, openProject, exportProject, readFile } from '../tauri/commands'
 import { open, save } from '@tauri-apps/plugin-dialog'
 
 export function Sidebar() {
   const [exportOpen, setExportOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { tmpPath, entryFile, toggleDiagnostics, setProject, diagnosticsVisible } = useAppStore()
+  const { tmpPath, entryFile, toggleDiagnostics, setProject, diagnosticsVisible, openFile } = useAppStore()
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -22,14 +22,18 @@ export function Sidebar() {
   async function handleNewProject() {
     const name = `projet-${Date.now()}`
     const info = await newProject(name)
-    setProject(info.tmpPath, null, 'main.typ')
+    setProject(info.tmpPath, null, 'main.typ', info.tree)
+    const content = await readFile(info.tmpPath, 'main.typ')
+    openFile({ path: 'main.typ', content, isDirty: false })
   }
 
   async function handleOpenProject() {
     const selected = await open({ filters: [{ name: 'Typst Project', extensions: ['typz'] }] })
     if (!selected) return
     const info = await openProject(selected as string)
-    setProject(info.tmpPath, selected as string, 'main.typ')
+    setProject(info.tmpPath, selected as string, 'main.typ', info.tree)
+    const content = await readFile(info.tmpPath, 'main.typ').catch(() => '')
+    if (content !== null) openFile({ path: 'main.typ', content, isDirty: false })
   }
 
   async function handleExport(format: 'pdf' | 'png' | 'svg') {

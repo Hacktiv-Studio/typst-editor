@@ -57,7 +57,7 @@ export interface AppState {
   progress: ProgressState
 
   // Actions
-  setProject: (tmpPath: string, typzPath: string | null, entryFile: string) => void
+  setProject: (tmpPath: string, typzPath: string | null, entryFile: string, tree: ProjectEntry[]) => void
   setTypzPath: (path: string) => void
   setDirty: (dirty: boolean) => void
   openFile: (file: OpenFile) => void

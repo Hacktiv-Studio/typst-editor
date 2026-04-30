@@ -27,8 +27,8 @@ export const useAppStore = create<AppState>()(
       diagnosticsHeight: 180,
       progress: DEFAULT_PROGRESS,
 
-      setProject: (tmpPath, typzPath, entryFile) =>
-        set({ tmpPath, typzPath, entryFile, openFiles: [], activeFile: null, pages: [], compileErrors: [] }),
+      setProject: (tmpPath, typzPath, entryFile, tree) =>
+        set({ tmpPath, typzPath, entryFile, projectTree: tree, openFiles: [], activeFile: null, pages: [], compileErrors: [] }),
       setTypzPath: (path) => set({ typzPath: path }),
       setDirty: (isDirty) => set({ isDirty }),
       openFile: (file) =>

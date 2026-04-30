@@ -43,9 +43,12 @@ export default function App() {
     let unlisten: (() => void) | undefined
     import('@tauri-apps/api/event').then(({ listen }) => {
       listen<string>('open-typz', async (e) => {
-        const { openProject } = await import('./tauri/commands')
+        const { openProject, readFile } = await import('./tauri/commands')
         const info = await openProject(e.payload)
-        useAppStore.getState().setProject(info.tmpPath, e.payload, 'main.typ')
+        const store = useAppStore.getState()
+        store.setProject(info.tmpPath, e.payload, 'main.typ', info.tree)
+        const content = await readFile(info.tmpPath, 'main.typ').catch(() => '')
+        store.openFile({ path: 'main.typ', content, isDirty: false })
       }).then((fn) => { unlisten = fn })
     })
     return () => unlisten?.()

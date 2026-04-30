@@ -1,7 +1,7 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::io::Write;
 use serde::Serialize;
-use tauri::{command, AppHandle, Emitter};
+use tauri::{command, AppHandle, Emitter, Manager};
 use walkdir::WalkDir;
 use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 
@@ -20,34 +20,53 @@ struct ProgressPayload {
     total: usize,
 }
 
-fn tmp_dir_for(name: &str) -> PathBuf {
-    let safe_name: String = name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
-        .collect();
-    std::env::temp_dir().join(format!("typst-editor-{}", safe_name))
+/// Returns the base directory for all project working dirs: <app_local_data_dir>/projects/
+fn projects_base_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    app.path()
+        .app_local_data_dir()
+        .map_err(|e| format!("cannot resolve app data dir: {e}"))
+        .map(|d| d.join("projects"))
 }
 
-fn validate_tmp_path(path: &std::path::Path) -> Result<(), String> {
-    let prefix = std::env::temp_dir().join("typst-editor-");
-    if !path.starts_with(&prefix) {
-        return Err(format!("path is not a managed tmp directory: {}", path.display()));
+fn project_dir_for(app: &AppHandle, name: &str) -> Result<PathBuf, String> {
+    let safe_name: String = name
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    Ok(projects_base_dir(app)?.join(safe_name))
+}
+
+fn validate_project_path(app: &AppHandle, path: &Path) -> Result<(), String> {
+    let base = projects_base_dir(app)?;
+    if !path.starts_with(&base) {
+        return Err(format!(
+            "path is not a managed project directory: {}",
+            path.display()
+        ));
     }
     Ok(())
 }
 
-#[command]
-pub async fn new_project(name: String) -> Result<ProjectInfo, String> {
-    let tmp = tmp_dir_for(&name);
-    tokio::fs::create_dir_all(&tmp).await.map_err(|e| e.to_string())?;
-    tokio::fs::write(tmp.join("main.typ"), "").await.map_err(|e| e.to_string())?;
-    let tmp_for_tree = tmp.clone();
-    let tree = tokio::task::spawn_blocking(move || build_tree(&tmp_for_tree, &tmp_for_tree))
+/// Pure helper used by both the command and tests.
+async fn create_project_at(dir: PathBuf) -> Result<ProjectInfo, String> {
+    tokio::fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
+    tokio::fs::write(dir.join("main.typ"), "").await.map_err(|e| e.to_string())?;
+    let dir_for_tree = dir.clone();
+    let tree = tokio::task::spawn_blocking(move || build_tree(&dir_for_tree, &dir_for_tree))
         .await
         .map_err(|e| e.to_string())?;
     Ok(ProjectInfo {
-        tmp_path: tmp.to_string_lossy().to_string(),
+        tmp_path: dir.to_string_lossy().to_string(),
         tree,
     })
+}
+
+#[command]
+pub async fn new_project(app: AppHandle, name: String) -> Result<ProjectInfo, String> {
+    let base = projects_base_dir(&app)?;
+    tokio::fs::create_dir_all(&base).await.map_err(|e| e.to_string())?;
+    let dir = project_dir_for(&app, &name)?;
+    create_project_at(dir).await
 }
 
 #[command]
@@ -56,18 +75,22 @@ pub async fn open_project(
     typz_path: String,
 ) -> Result<ProjectInfo, String> {
     let typz = PathBuf::from(&typz_path);
-    let stem = typz.file_stem()
+    let stem = typz
+        .file_stem()
         .ok_or_else(|| "invalid .typz path: no file stem".to_string())?
         .to_string_lossy()
         .to_string();
-    let tmp = tmp_dir_for(&stem);
 
-    if tmp.exists() {
-        tokio::fs::remove_dir_all(&tmp).await.map_err(|e| e.to_string())?;
+    let dir = project_dir_for(&app, &stem)?;
+    let base = projects_base_dir(&app)?;
+    tokio::fs::create_dir_all(&base).await.map_err(|e| e.to_string())?;
+
+    if dir.exists() {
+        tokio::fs::remove_dir_all(&dir).await.map_err(|e| e.to_string())?;
     }
-    tokio::fs::create_dir_all(&tmp).await.map_err(|e| e.to_string())?;
+    tokio::fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
 
-    let tmp_clone = tmp.clone();
+    let dir_clone = dir.clone();
     let typz_clone = typz.clone();
 
     tokio::task::spawn_blocking(move || -> Result<(), String> {
@@ -77,7 +100,7 @@ pub async fn open_project(
 
         for i in 0..total {
             let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-            let outpath = safe_join(&tmp_clone, entry.name()).map_err(|e| e.to_string())?;
+            let outpath = safe_join(&dir_clone, entry.name()).map_err(|e| e.to_string())?;
 
             if entry.name().ends_with('/') {
                 std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
@@ -100,12 +123,12 @@ pub async fn open_project(
     .await
     .map_err(|e| e.to_string())??;
 
-    let tmp_for_tree = tmp.clone();
-    let tree = tokio::task::spawn_blocking(move || build_tree(&tmp_for_tree, &tmp_for_tree))
+    let dir_for_tree = dir.clone();
+    let tree = tokio::task::spawn_blocking(move || build_tree(&dir_for_tree, &dir_for_tree))
         .await
         .map_err(|e| e.to_string())?;
     Ok(ProjectInfo {
-        tmp_path: tmp.to_string_lossy().to_string(),
+        tmp_path: dir.to_string_lossy().to_string(),
         tree,
     })
 }
@@ -117,7 +140,7 @@ pub async fn save_project(
     typz_path: String,
 ) -> Result<(), String> {
     let tmp = PathBuf::from(&tmp_path);
-    validate_tmp_path(&tmp)?;
+    validate_project_path(&app, &tmp)?;
     let typz = PathBuf::from(&typz_path);
 
     tokio::task::spawn_blocking(move || -> Result<(), String> {
@@ -135,8 +158,11 @@ pub async fn save_project(
 
         for (i, entry) in entries.iter().enumerate() {
             let path = entry.path();
-            let rel = path.strip_prefix(&tmp).unwrap_or(path)
-                .to_string_lossy().to_string();
+            let rel = path
+                .strip_prefix(&tmp)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .to_string();
 
             if path.is_dir() {
                 zip.add_directory(format!("{}/", rel), options).map_err(|e| e.to_string())?;
@@ -161,9 +187,9 @@ pub async fn save_project(
 }
 
 #[command]
-pub async fn cleanup_tmp(tmp_path: String) -> Result<(), String> {
+pub async fn cleanup_tmp(app: AppHandle, tmp_path: String) -> Result<(), String> {
     let path = PathBuf::from(&tmp_path);
-    validate_tmp_path(&path)?;
+    validate_project_path(&app, &path)?;
     if path.exists() {
         tokio::fs::remove_dir_all(&path).await.map_err(|e| e.to_string())?;
     }
@@ -176,17 +202,16 @@ mod tests {
 
     #[tokio::test]
     async fn test_new_project_creates_main_typ() {
-        let project = new_project("test-proj-123".into()).await.unwrap();
+        let base = tempfile::tempdir().unwrap();
+        let dir = base.path().join("test-proj-123");
+        let project = create_project_at(dir).await.unwrap();
         let main = PathBuf::from(&project.tmp_path).join("main.typ");
         assert!(main.exists());
         assert!(project.tree.iter().any(|e| e.name == "main.typ"));
-        // cleanup
-        let _ = cleanup_tmp(project.tmp_path).await;
     }
 
     #[tokio::test]
     async fn test_zip_slip_rejected() {
-        // create a zip with a malicious entry name
         let dir = tempfile::tempdir().unwrap();
         let zip_path = dir.path().join("evil.typz");
         {
@@ -197,10 +222,9 @@ mod tests {
             zip.write_all(b"evil").unwrap();
             zip.finish().unwrap();
         }
-        // Test safe_join directly with the malicious path
         use crate::commands::filesystem::safe_join;
-        let base = std::env::temp_dir().join("typst-editor-test-zipslip");
-        let result = safe_join(&base, "../evil.txt");
+        let base = tempfile::tempdir().unwrap();
+        let result = safe_join(base.path(), "../evil.txt");
         assert!(result.is_err(), "zip slip path should be rejected");
     }
 }
