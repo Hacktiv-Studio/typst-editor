@@ -25,6 +25,7 @@ pub(crate) fn safe_join(root: &std::path::Path, rel: &str) -> Result<std::path::
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectEntry {
     pub name: String,
     pub path: String,      // chemin relatif

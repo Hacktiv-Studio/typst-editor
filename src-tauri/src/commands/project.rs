@@ -8,6 +8,7 @@ use zip::{ZipArchive, ZipWriter, write::SimpleFileOptions};
 use crate::commands::filesystem::{build_tree, safe_join, ProjectEntry};
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ProjectInfo {
     pub tmp_path: String,
     pub tree: Vec<ProjectEntry>,
