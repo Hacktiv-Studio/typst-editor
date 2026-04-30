@@ -1,51 +1,72 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle } from 'react-resizable-panels'
+import { useEffect } from 'react'
+import { Sidebar } from './components/Sidebar'
+import { Explorer } from './components/Explorer/Explorer'
+import { EditorPanel } from './components/Editor/EditorPanel'
+import { PreviewPanel } from './components/Preview/PreviewPanel'
+import { DiagnosticsPanel } from './components/Diagnostics/DiagnosticsPanel'
+import { ProgressModal } from './components/ProgressModal'
+import { useAppStore } from './store/appStore'
+import { onProgress } from './tauri/commands'
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+export default function App() {
+  const { explorerVisible, previewVisible, diagnosticsVisible, setProgress } = useAppStore()
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    onProgress((e) => {
+      setProgress({ visible: true, label: e.label, current: e.current, total: e.total })
+      if (e.current >= e.total) {
+        setTimeout(() => setProgress({ visible: false }), 300)
+      }
+    }).then((fn) => { unlisten = fn })
+    return () => unlisten?.()
+  }, [])
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    <div className="app-root flex h-screen w-screen overflow-hidden bg-[#11111b] text-[#cdd6f4]">
+      <Sidebar />
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+      <div className="flex flex-col flex-1 min-w-0">
+        <PanelGroup direction="vertical" className="flex-1">
+          <Panel defaultSize={75} minSize={30}>
+            <PanelGroup direction="horizontal">
+              {explorerVisible && (
+                <>
+                  <Panel defaultSize={20} minSize={10} maxSize={40}>
+                    <Explorer />
+                  </Panel>
+                  <PanelResizeHandle className="w-1 bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
+                </>
+              )}
+
+              <Panel minSize={20}>
+                <EditorPanel />
+              </Panel>
+
+              {previewVisible && (
+                <>
+                  <PanelResizeHandle className="w-1 bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
+                  <Panel defaultSize={35} minSize={15}>
+                    <PreviewPanel />
+                  </Panel>
+                </>
+              )}
+            </PanelGroup>
+          </Panel>
+
+          {diagnosticsVisible && (
+            <>
+              <PanelResizeHandle className="h-1 bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
+              <Panel defaultSize={25} minSize={10} maxSize={60}>
+                <DiagnosticsPanel />
+              </Panel>
+            </>
+          )}
+        </PanelGroup>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
 
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+      <ProgressModal />
+    </div>
+  )
 }
-
-export default App;
