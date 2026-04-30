@@ -2,6 +2,28 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::command;
 
+fn safe_join(root: &std::path::Path, rel: &str) -> Result<std::path::PathBuf, String> {
+    let mut result = root.to_path_buf();
+    for component in std::path::Path::new(rel).components() {
+        match component {
+            std::path::Component::ParentDir => {
+                if !result.pop() || !result.starts_with(root) {
+                    return Err(format!("path traversal denied: '{}'", rel));
+                }
+            }
+            std::path::Component::Normal(c) => result.push(c),
+            std::path::Component::CurDir | std::path::Component::RootDir => {}
+            std::path::Component::Prefix(_) => {
+                return Err("absolute paths not allowed".into());
+            }
+        }
+    }
+    if !result.starts_with(root) {
+        return Err(format!("path traversal denied: '{}'", rel));
+    }
+    Ok(result)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectEntry {
     pub name: String,
@@ -45,7 +67,7 @@ pub async fn list_project(tmp_path: String) -> Result<Vec<ProjectEntry>, String>
 
 #[command]
 pub async fn create_file(tmp_path: String, rel_path: String) -> Result<(), String> {
-    let path = PathBuf::from(&tmp_path).join(&rel_path);
+    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
     }
@@ -54,21 +76,21 @@ pub async fn create_file(tmp_path: String, rel_path: String) -> Result<(), Strin
 
 #[command]
 pub async fn create_folder(tmp_path: String, rel_path: String) -> Result<(), String> {
-    let path = PathBuf::from(&tmp_path).join(&rel_path);
+    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
     tokio::fs::create_dir_all(&path).await.map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn rename_path(tmp_path: String, old_rel: String, new_rel: String) -> Result<(), String> {
     let root = PathBuf::from(&tmp_path);
-    let old = root.join(&old_rel);
-    let new = root.join(&new_rel);
+    let old = safe_join(&root, &old_rel)?;
+    let new = safe_join(&root, &new_rel)?;
     tokio::fs::rename(&old, &new).await.map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn delete_path(tmp_path: String, rel_path: String) -> Result<(), String> {
-    let path = PathBuf::from(&tmp_path).join(&rel_path);
+    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
     tokio::task::spawn_blocking(move || {
         if path.is_dir() {
             std::fs::remove_dir_all(&path)
@@ -83,13 +105,13 @@ pub async fn delete_path(tmp_path: String, rel_path: String) -> Result<(), Strin
 
 #[command]
 pub async fn read_file(tmp_path: String, rel_path: String) -> Result<String, String> {
-    let path = PathBuf::from(&tmp_path).join(&rel_path);
+    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
     tokio::fs::read_to_string(&path).await.map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn write_file(tmp_path: String, rel_path: String, content: String) -> Result<(), String> {
-    let path = PathBuf::from(&tmp_path).join(&rel_path);
+    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
     tokio::fs::write(&path, content).await.map_err(|e| e.to_string())
 }
 
@@ -128,5 +150,14 @@ mod tests {
         let tree = list_project(tmp).await.unwrap();
         assert!(tree.iter().any(|e| e.name == "new.typ"));
         assert!(!tree.iter().any(|e| e.name == "old.typ"));
+    }
+
+    #[tokio::test]
+    async fn test_path_traversal_denied() {
+        let dir = tempdir().unwrap();
+        let tmp = dir.path().to_string_lossy().to_string();
+        let result = create_file(tmp, "../../evil.txt".into()).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("traversal"));
     }
 }
