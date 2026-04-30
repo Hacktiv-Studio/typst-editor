@@ -44,12 +44,12 @@ export default function App() {
           <Panel defaultSize={75} minSize={30}>
             <PanelGroup orientation="horizontal">
               {explorerVisible && (
-                <>
-                  <Panel defaultSize={20} minSize={10} maxSize={40}>
-                    <Explorer />
-                  </Panel>
-                  <PanelResizeHandle className="w-1 bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
-                </>
+                <Panel defaultSize={20} minSize={10} maxSize={40}>
+                  <Explorer />
+                </Panel>
+              )}
+              {explorerVisible && (
+                <PanelResizeHandle className="w-1 bg-[#313244] hover:bg-[#89b4fa] cursor-col-resize transition-colors" />
               )}
 
               <Panel minSize={20}>
@@ -57,23 +57,23 @@ export default function App() {
               </Panel>
 
               {previewVisible && (
-                <>
-                  <PanelResizeHandle className="w-1 bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
-                  <Panel defaultSize={35} minSize={15}>
-                    <PreviewPanel />
-                  </Panel>
-                </>
+                <PanelResizeHandle className="w-1 bg-[#313244] hover:bg-[#89b4fa] cursor-col-resize transition-colors" />
+              )}
+              {previewVisible && (
+                <Panel defaultSize={35} minSize={15}>
+                  <PreviewPanel />
+                </Panel>
               )}
             </PanelGroup>
           </Panel>
 
           {diagnosticsVisible && (
-            <>
-              <PanelResizeHandle className="h-1 bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
-              <Panel defaultSize={25} minSize={10} maxSize={60}>
-                <DiagnosticsPanel />
-              </Panel>
-            </>
+            <PanelResizeHandle className="h-1 bg-[#313244] hover:bg-[#89b4fa] cursor-row-resize transition-colors" />
+          )}
+          {diagnosticsVisible && (
+            <Panel defaultSize={25} minSize={10} maxSize={60}>
+              <DiagnosticsPanel />
+            </Panel>
           )}
         </PanelGroup>
       </div>
