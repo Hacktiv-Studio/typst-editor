@@ -70,11 +70,13 @@ export const listProject = (tmpPath: string): Promise<ProjectEntry[]> =>
 
 // ── Events ───────────────────────────────────────────────────
 
+// ProgressEvent is the raw event payload from the Rust backend.
+// It does not include `visible` — that field belongs to UI state (ProgressState in types.ts).
 export interface ProgressEvent {
   label: string
   current: number
   total: number
 }
 
-export const onProgress = (cb: (e: ProgressEvent) => void) =>
+export const onProgress = (cb: (e: ProgressEvent) => void): Promise<() => void> =>
   listen<ProgressEvent>('progress', (e) => cb(e.payload))
