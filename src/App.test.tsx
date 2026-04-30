@@ -1,10 +1,14 @@
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render } from '@testing-library/react'
 import { describe, it, expect, vi } from 'vitest'
 import App from './App'
 
 vi.mock('./tauri/commands', () => ({
   onProgress: vi.fn(() => Promise.resolve(() => {})),
+}))
+
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(() => Promise.resolve(() => {})),
 }))
 
 vi.mock('react-resizable-panels', () => ({

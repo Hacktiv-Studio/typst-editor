@@ -10,7 +10,7 @@ import type { ProjectEntry } from '../../types'
 
 function TreeNode({ entry, depth = 0 }: { entry: ProjectEntry; depth?: number }) {
   const [open, setOpen] = useState(depth === 0)
-  const { tmpPath, openFile, setProjectTree } = useAppStore()
+  const { tmpPath, openFile } = useAppStore()
 
   async function handleFileClick() {
     if (!tmpPath) return

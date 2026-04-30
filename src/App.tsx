@@ -40,9 +40,9 @@ export default function App() {
       <Sidebar />
 
       <div className="flex flex-col flex-1 min-w-0">
-        <PanelGroup direction="vertical" className="flex-1">
+        <PanelGroup orientation="vertical" className="flex-1">
           <Panel defaultSize={75} minSize={30}>
-            <PanelGroup direction="horizontal">
+            <PanelGroup orientation="horizontal">
               {explorerVisible && (
                 <>
                   <Panel defaultSize={20} minSize={10} maxSize={40}>

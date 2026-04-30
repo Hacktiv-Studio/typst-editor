@@ -7,7 +7,7 @@ import { open, save } from '@tauri-apps/plugin-dialog'
 export function Sidebar() {
   const [exportOpen, setExportOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { tmpPath, typzPath, entryFile, toggleDiagnostics, setProject, setProgress } = useAppStore()
+  const { tmpPath, entryFile, toggleDiagnostics, setProject } = useAppStore()
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {

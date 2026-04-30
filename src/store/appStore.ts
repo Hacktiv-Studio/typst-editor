@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import type { AppState, OpenFile, CompileError, ProjectEntry, ProgressState } from '../types'
+import type { AppState, ProgressState } from '../types'
 
 const DEFAULT_PROGRESS: ProgressState = { visible: false, label: '', current: 0, total: 0 }
 
