@@ -5,7 +5,7 @@ import { Thumbnails } from './Thumbnails'
 
 export function PreviewPanel() {
   const {
-    pages, activePage, zoom, showThumbnails, isCompiling, entryFile,
+    pages, zoom, showThumbnails, isCompiling, entryFile,
     setZoom, toggleThumbnails,
   } = useAppStore()
 

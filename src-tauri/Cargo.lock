@@ -1445,20 +1445,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fontdb"
-version = "0.22.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a3a6f9af55fb97ad673fb7a69533eb2f967648a06fa21f8c9bb2cd6d33975716"
-dependencies = [
- "fontconfig-parser",
- "log",
- "memmap2",
- "slotmap",
- "tinyvec",
- "ttf-parser",
-]
-
-[[package]]
 name = "foreign-types"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4638,7 +4624,7 @@ version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5014c9dadcf318fb7ef8c16438e95abcc9de1ae24d60d5bccc64c55100c50364"
 dependencies = [
- "fontdb 0.21.0",
+ "fontdb",
  "image",
  "log",
  "miniz_oxide",
@@ -5270,9 +5256,7 @@ dependencies = [
  "bytes",
  "libc",
  "mio 1.2.0",
- "parking_lot",
  "pin-project-lite",
- "signal-hook-registry",
  "socket2",
  "tokio-macros",
  "windows-sys 0.61.2",
@@ -5594,7 +5578,7 @@ name = "typst-editor"
 version = "0.1.0"
 dependencies = [
  "chrono",
- "fontdb 0.22.0",
+ "fontdb",
  "notify",
  "serde",
  "serde_json",
@@ -5696,7 +5680,7 @@ dependencies = [
  "csv",
  "ecow",
  "flate2",
- "fontdb 0.21.0",
+ "fontdb",
  "hayagriva",
  "icu_properties 1.5.1",
  "icu_provider 1.5.0",
@@ -6066,7 +6050,7 @@ dependencies = [
  "base64 0.22.1",
  "data-url",
  "flate2",
- "fontdb 0.21.0",
+ "fontdb",
  "imagesize",
  "kurbo 0.11.3",
  "log",
