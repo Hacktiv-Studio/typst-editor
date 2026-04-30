@@ -1,7 +1,6 @@
 use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::command;
-use walkdir::WalkDir;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectEntry {
