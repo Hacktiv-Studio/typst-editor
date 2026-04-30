@@ -23,6 +23,18 @@ export default function App() {
     return () => unlisten?.()
   }, [])
 
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    import('@tauri-apps/api/event').then(({ listen }) => {
+      listen<string>('open-typz', async (e) => {
+        const { openProject } = await import('./tauri/commands')
+        const info = await openProject(e.payload)
+        useAppStore.getState().setProject(info.tmpPath, e.payload, 'main.typ')
+      }).then((fn) => { unlisten = fn })
+    })
+    return () => unlisten?.()
+  }, [])
+
   return (
     <div className="app-root flex h-screen w-screen overflow-hidden bg-[#11111b] text-[#cdd6f4]">
       <Sidebar />
