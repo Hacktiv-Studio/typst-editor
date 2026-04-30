@@ -81,8 +81,9 @@ export function Sidebar() {
         <div className="relative">
           <button
             title="Exporter"
+            disabled={!tmpPath}
             onClick={() => setExportOpen((o) => !o)}
-            className="w-8 h-8 flex items-center justify-center bg-[#89b4fa] text-[#11111b] rounded-md hover:bg-[#74c7ec] transition-colors"
+            className="w-8 h-8 flex items-center justify-center bg-[#89b4fa] text-[#11111b] rounded-md hover:bg-[#74c7ec] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#89b4fa]"
           >
             <FaFileExport size={15} />
           </button>
