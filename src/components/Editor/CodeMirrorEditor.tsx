@@ -4,9 +4,7 @@ import { EditorView, keymap } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
-
-// codemirror-lang-typst is not on npm — using plain text fallback
-// typstLanguage = null means no language-specific syntax highlighting
+import { typstLanguage } from '../../lib/typst-language'
 
 interface Props {
   content: string
@@ -35,6 +33,7 @@ export function CodeMirrorEditor({ content, onChange, onSave }: Props) {
       ]),
       oneDark,
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+      typstLanguage,
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           onChangeRef.current(update.state.doc.toString())
