@@ -1,13 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
-import { FaFolderPlus, FaFolderOpen, FaFileExport, FaFilePdf, FaFileImage, FaVectorSquare, FaTerminal, FaTableColumns, FaEye } from 'react-icons/fa6'
+import { FaFolderPlus, FaFolderOpen, FaFileExport, FaFilePdf, FaFileImage, FaVectorSquare, FaTerminal, FaTableColumns, FaEye, FaFloppyDisk } from 'react-icons/fa6'
 import { useAppStore } from '../store/appStore'
-import { newProject, openProject, exportProject, readFile } from '../tauri/commands'
+import { newProject, openProject, exportProject, readFile, saveProject, writeFile } from '../tauri/commands'
 import { open, save } from '@tauri-apps/plugin-dialog'
 
 export function Sidebar() {
   const [exportOpen, setExportOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { tmpPath, entryFile, toggleDiagnostics, setProject, diagnosticsVisible, openFile, toggleExplorer, explorerVisible, togglePreview, previewVisible } = useAppStore()
+  const { tmpPath, entryFile, toggleDiagnostics, setProject, diagnosticsVisible, openFile, toggleExplorer, explorerVisible, togglePreview, previewVisible, typzPath, setTypzPath, openFiles, activeFile, markFileSaved } = useAppStore()
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -45,6 +45,30 @@ export function Sidebar() {
     await exportProject(tmpPath, entryFile, format, outPath as string)
   }
 
+  async function handleSave() {
+    if (!tmpPath) return
+    if (typzPath) {
+      const file = openFiles.find((f) => f.path === activeFile)
+      if (file) {
+        await writeFile(tmpPath, file.path, file.content)
+        markFileSaved(file.path)
+      }
+      await saveProject(tmpPath, typzPath)
+    } else {
+      await handleSaveAs()
+    }
+  }
+
+  async function handleSaveAs() {
+    if (!tmpPath) return
+    const outPath = await save({
+      filters: [{ name: 'Typst Project', extensions: ['typz'] }],
+    })
+    if (!outPath) return
+    setTypzPath(outPath as string)
+    await saveProject(tmpPath, outPath as string)
+  }
+
   return (
     <div className="w-11 bg-[#181825] flex flex-col items-center py-3 gap-3 border-r border-[#313244] flex-shrink-0 relative z-20">
       {/* Logo */}
@@ -67,6 +91,14 @@ export function Sidebar() {
           className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors"
         >
           <FaFolderOpen size={15} />
+        </button>
+        <button
+          title="Enregistrer (Ctrl+S)"
+          onClick={handleSave}
+          disabled={!tmpPath}
+          className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#585b70]"
+        >
+          <FaFloppyDisk size={14} />
         </button>
       </div>
 
