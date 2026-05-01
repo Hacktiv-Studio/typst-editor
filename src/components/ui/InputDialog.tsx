@@ -21,7 +21,7 @@ export function InputDialog({ title, label, defaultValue = '', onConfirm, onClos
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = value.trim()
-    if (trimmed) onConfirm(trimmed)
+    if (trimmed) { onConfirm(trimmed); onClose() }
   }
 
   return (

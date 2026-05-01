@@ -149,7 +149,7 @@ async fn copy_dir_recursive(src: &PathBuf, dest: &PathBuf) -> std::io::Result<()
     while let Some(entry) = entries.next_entry().await? {
         let src_path = entry.path();
         let dest_path = dest.join(entry.file_name());
-        if src_path.is_dir() {
+        if tokio::fs::metadata(&src_path).await?.is_dir() {
             Box::pin(copy_dir_recursive(&src_path, &dest_path)).await?;
         } else {
             tokio::fs::copy(&src_path, &dest_path).await?;
