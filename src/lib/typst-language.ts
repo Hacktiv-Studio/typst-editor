@@ -3,23 +3,38 @@ import { StreamLanguage } from '@codemirror/language'
 interface State {
   inMathBlock: boolean
   inRawBlock: boolean
+  inBlockComment: boolean
 }
 
 const typstLanguage = StreamLanguage.define<State>({
   name: 'typst',
 
   startState(): State {
-    return { inMathBlock: false, inRawBlock: false }
+    return { inMathBlock: false, inRawBlock: false, inBlockComment: false }
   },
 
   token(stream: any, state: State): string | null {
+    // Multi-line block comment continuation
+    if (state.inBlockComment) {
+      if (stream.match('*/')) {
+        state.inBlockComment = false
+      } else {
+        stream.next()
+      }
+      return 'comment'
+    }
+
     // Raw block fence ``` ... ```
     if (stream.match('```')) {
       state.inRawBlock = !state.inRawBlock
       return 'monospace'
     }
     if (state.inRawBlock) {
-      stream.skipToEnd()
+      if (stream.match('```')) {
+        state.inRawBlock = false
+      } else {
+        stream.next()
+      }
       return 'monospace'
     }
 
@@ -29,7 +44,11 @@ const typstLanguage = StreamLanguage.define<State>({
       return 'string'
     }
     if (state.inMathBlock) {
-      stream.skipToEnd()
+      if (stream.match('$$')) {
+        state.inMathBlock = false
+      } else {
+        stream.next()
+      }
       return 'string'
     }
 
@@ -41,8 +60,9 @@ const typstLanguage = StreamLanguage.define<State>({
 
     // Block comment /* ... */
     if (stream.match('/*')) {
+      state.inBlockComment = true
       while (!stream.eol()) {
-        if (stream.match('*/')) break
+        if (stream.match('*/')) { state.inBlockComment = false; break }
         stream.next()
       }
       return 'comment'
