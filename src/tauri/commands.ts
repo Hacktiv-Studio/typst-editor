@@ -80,3 +80,9 @@ export interface ProgressEvent {
 
 export const onProgress = (cb: (e: ProgressEvent) => void): Promise<() => void> =>
   listen<ProgressEvent>('progress', (e) => cb(e.payload))
+
+export const importFile = (tmpPath: string, srcPath: string): Promise<string> =>
+  invoke('import_file', { tmpPath, srcPath })
+
+export const importFolder = (tmpPath: string, srcPath: string): Promise<string> =>
+  invoke('import_folder', { tmpPath, srcPath })

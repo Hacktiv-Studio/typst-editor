@@ -116,6 +116,48 @@ pub async fn write_file(tmp_path: String, rel_path: String, content: String) -> 
     tokio::fs::write(&path, content).await.map_err(|e| e.to_string())
 }
 
+#[command]
+pub async fn import_file(tmp_path: String, src_path: String) -> Result<String, String> {
+    let root = PathBuf::from(&tmp_path);
+    let src = PathBuf::from(&src_path);
+    let name = src.file_name()
+        .ok_or_else(|| "invalid source path".to_string())?
+        .to_string_lossy()
+        .to_string();
+    let dest = safe_join(&root, &name)?;
+    tokio::fs::copy(&src, &dest).await.map_err(|e| e.to_string())?;
+    Ok(name)
+}
+
+#[command]
+pub async fn import_folder(tmp_path: String, src_path: String) -> Result<String, String> {
+    let root = PathBuf::from(&tmp_path);
+    let src = PathBuf::from(&src_path);
+    let name = src.file_name()
+        .ok_or_else(|| "invalid source path".to_string())?
+        .to_string_lossy()
+        .to_string();
+    let dest = safe_join(&root, &name)?;
+    copy_dir_recursive(&src, &dest).await
+        .map_err(|e| e.to_string())?;
+    Ok(name)
+}
+
+async fn copy_dir_recursive(src: &PathBuf, dest: &PathBuf) -> std::io::Result<()> {
+    tokio::fs::create_dir_all(dest).await?;
+    let mut entries = tokio::fs::read_dir(src).await?;
+    while let Some(entry) = entries.next_entry().await? {
+        let src_path = entry.path();
+        let dest_path = dest.join(entry.file_name());
+        if src_path.is_dir() {
+            Box::pin(copy_dir_recursive(&src_path, &dest_path)).await?;
+        } else {
+            tokio::fs::copy(&src_path, &dest_path).await?;
+        }
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
