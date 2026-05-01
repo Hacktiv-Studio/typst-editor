@@ -73,7 +73,9 @@ export const useAppStore = create<AppState>()(
     {
       name: 'typst-editor-ui',
       partialize: (s) => ({
+        tmpPath: s.tmpPath,
         typzPath: s.typzPath,
+        activeFile: s.activeFile,
         explorerVisible: s.explorerVisible,
         previewVisible: s.previewVisible,
         diagnosticsVisible: s.diagnosticsVisible,

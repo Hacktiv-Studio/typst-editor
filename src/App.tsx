@@ -7,7 +7,7 @@ import { PreviewPanel } from './components/Preview/PreviewPanel'
 import { DiagnosticsPanel } from './components/Diagnostics/DiagnosticsPanel'
 import { ProgressModal } from './components/ProgressModal'
 import { useAppStore } from './store/appStore'
-import { onProgress } from './tauri/commands'
+import { listProject, onProgress, readFile } from './tauri/commands'
 
 export default function App() {
   const { explorerVisible, previewVisible, diagnosticsVisible, setProgress } = useAppStore()
@@ -37,6 +37,26 @@ export default function App() {
       }
     }).then((fn) => { unlisten = fn })
     return () => unlisten?.()
+  }, [])
+
+  useEffect(() => {
+    const store = useAppStore.getState()
+    const { tmpPath, activeFile } = store
+    if (!tmpPath) return
+
+    listProject(tmpPath)
+      .then((tree) => {
+        store.setProjectTree(tree)
+        if (activeFile) {
+          return readFile(tmpPath, activeFile).then((content) => {
+            store.openFile({ path: activeFile, content, isDirty: false })
+          })
+        }
+      })
+      .catch(() => {
+        // Project dir was deleted — reset state
+        useAppStore.setState({ tmpPath: null, typzPath: null, activeFile: null, projectTree: [], openFiles: [] })
+      })
   }, [])
 
   useEffect(() => {
