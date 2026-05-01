@@ -73,7 +73,7 @@ export default function App() {
               onLayoutChanged={horizontalLayout.onLayoutChanged}
             >
               {explorerVisible && (
-                <Panel id="explorer" defaultSize={20} minSize={10}>
+                <Panel id="explorer" defaultSize={20} minSize="100px">
                   <Explorer />
                 </Panel>
               )}
@@ -81,7 +81,7 @@ export default function App() {
                 <PanelResizeHandle className="w-[5px] bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
               )}
 
-              <Panel id="editor" minSize={15}>
+              <Panel id="editor" minSize="100px">
                 <EditorPanel />
               </Panel>
 
@@ -89,7 +89,7 @@ export default function App() {
                 <PanelResizeHandle className="w-[5px] bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
               )}
               {previewVisible && (
-                <Panel id="preview" defaultSize={35} minSize={10}>
+                <Panel id="preview" defaultSize={35} minSize="100px">
                   <PreviewPanel />
                 </Panel>
               )}

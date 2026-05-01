@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { FaFolderPlus, FaFolderOpen, FaFileExport, FaFilePdf, FaFileImage, FaVectorSquare, FaTerminal } from 'react-icons/fa6'
+import { FaFolderPlus, FaFolderOpen, FaFileExport, FaFilePdf, FaFileImage, FaVectorSquare, FaTerminal, FaTableColumns, FaEye } from 'react-icons/fa6'
 import { useAppStore } from '../store/appStore'
 import { newProject, openProject, exportProject, readFile } from '../tauri/commands'
 import { open, save } from '@tauri-apps/plugin-dialog'
@@ -7,7 +7,7 @@ import { open, save } from '@tauri-apps/plugin-dialog'
 export function Sidebar() {
   const [exportOpen, setExportOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
-  const { tmpPath, entryFile, toggleDiagnostics, setProject, diagnosticsVisible, openFile } = useAppStore()
+  const { tmpPath, entryFile, toggleDiagnostics, setProject, diagnosticsVisible, openFile, toggleExplorer, explorerVisible, togglePreview, previewVisible } = useAppStore()
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -72,6 +72,30 @@ export function Sidebar() {
 
       {/* Bottom actions */}
       <div className="mt-auto flex flex-col gap-2 items-center" ref={menuRef}>
+        {/* Toggle explorer */}
+        <button
+          title="Explorateur"
+          onClick={toggleExplorer}
+          className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
+            explorerVisible
+              ? 'bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]'
+              : 'text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]'
+          }`}
+        >
+          <FaTableColumns size={13} />
+        </button>
+        {/* Toggle preview */}
+        <button
+          title="Aperçu"
+          onClick={togglePreview}
+          className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
+            previewVisible
+              ? 'bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]'
+              : 'text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]'
+          }`}
+        >
+          <FaEye size={13} />
+        </button>
         {/* Toggle diagnostics */}
         <button
           title="Diagnostics"
