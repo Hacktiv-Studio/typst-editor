@@ -65,6 +65,7 @@ export interface AppState {
   setActiveFile: (path: string) => void
   updateFileContent: (path: string, content: string) => void
   markFileSaved: (path: string) => void
+  renameOpenFile: (oldPath: string, newPath: string) => void
   setPages: (pages: string[]) => void
   setActivePage: (page: number) => void
   setZoom: (zoom: number) => void

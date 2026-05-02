@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef, useEffect } from 'react'
 import {
   FaChevronRight, FaChevronDown,
   FaFolder, FaFolderOpen, FaFileLines,
@@ -6,8 +6,9 @@ import {
 import { useAppStore } from '../../store/appStore'
 import {
   readFile, createFile, createFolder, listProject,
-  renamePath, deletePath, importFile, importFolder,
+  renamePath, deletePath, importFile, importFolder, importPath,
 } from '../../tauri/commands'
+import { listen } from '@tauri-apps/api/event'
 import { open as openDialog } from '@tauri-apps/plugin-dialog'
 import type { ProjectEntry } from '../../types'
 import { InputDialog } from '../ui/InputDialog'
@@ -30,10 +31,18 @@ function TreeNode({
   entry,
   depth = 0,
   onContextMenu,
+  onMove,
+  dragOver,
+  setDragOver,
+  draggedPathRef,
 }: {
   entry: ProjectEntry
   depth?: number
   onContextMenu: (e: React.MouseEvent, entry: ProjectEntry) => void
+  onMove: (src: string, destDir: string) => void
+  dragOver: string | null
+  setDragOver: (path: string | null) => void
+  draggedPathRef: React.MutableRefObject<string | null>
 }) {
   const [open, setOpen] = useState(depth === 0)
   const { tmpPath, openFile, activeFile } = useAppStore()
@@ -45,13 +54,46 @@ function TreeNode({
   }
 
   const isActive = !entry.isDir && entry.path === activeFile
+  const isDragTarget = entry.isDir && dragOver === entry.path
+  const isBeingDragged = draggedPathRef.current === entry.path
+
+  const folderDropHandlers = entry.isDir ? {
+    onDragOver: (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      e.dataTransfer.dropEffect = 'move'
+      setDragOver(entry.path)
+    },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      const src = e.dataTransfer.getData('text/plain') || draggedPathRef.current
+      if (src) onMove(src, entry.path)
+      setDragOver(null)
+    },
+  } : {}
 
   return (
     <div>
       <div
-        className={`flex items-center gap-1.5 py-0.5 cursor-pointer text-[#a6adc8] text-[10px] group select-none ${
-          isActive ? 'bg-[#313244]' : 'hover:bg-[#313244]/50'
-        }`}
+        draggable
+        onDragStart={(e) => {
+          draggedPathRef.current = entry.path
+          e.dataTransfer.setData('text/plain', entry.path)
+          e.dataTransfer.effectAllowed = 'move'
+        }}
+        onDragEnd={() => {
+          draggedPathRef.current = null
+          setDragOver(null)
+        }}
+        {...folderDropHandlers}
+        className={`flex items-center gap-1.5 py-1 cursor-pointer text-[#a6adc8] text-xs select-none transition-colors ${
+          isDragTarget
+            ? 'bg-[#45475a] outline outline-1 outline-[#89b4fa]'
+            : isActive
+              ? 'bg-[#313244]'
+              : 'hover:bg-[#313244]/50'
+        } ${isBeingDragged ? 'opacity-40' : ''}`}
         style={{ paddingLeft: `${16 + depth * 12}px` }}
         onClick={() => (entry.isDir ? setOpen((o) => !o) : handleFileClick())}
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, entry) }}
@@ -72,22 +114,70 @@ function TreeNode({
         <span className="truncate flex-1">{entry.name}</span>
       </div>
       {entry.isDir && open && entry.children?.map((child) => (
-        <TreeNode key={child.path} entry={child} depth={depth + 1} onContextMenu={onContextMenu} />
+        <TreeNode
+          key={child.path}
+          entry={child}
+          depth={depth + 1}
+          onContextMenu={onContextMenu}
+          onMove={onMove}
+          dragOver={dragOver}
+          setDragOver={setDragOver}
+          draggedPathRef={draggedPathRef}
+        />
       ))}
     </div>
   )
 }
 
 export function FileTree() {
-  const { projectTree, tmpPath, setProjectTree } = useAppStore()
+  const { projectTree, tmpPath, setProjectTree, renameOpenFile } = useAppStore()
   const [dialog, setDialog] = useState<DialogState>({ type: 'none' })
   const [menu, setMenu] = useState<MenuState>({ type: 'none' })
+  const [dragOver, setDragOver] = useState<string | null>(null)
+  const draggedPathRef = useRef<string | null>(null)
+  const [externalDrag, setExternalDrag] = useState(false)
+
+  useEffect(() => {
+    if (!tmpPath) return
+    const unlisteners: Array<() => void> = []
+
+    listen<{ paths: string[] }>('tauri://drag-enter', () => {
+      setExternalDrag(true)
+    }).then((u) => unlisteners.push(u))
+
+    listen<{ paths: string[] }>('tauri://drag-leave', () => {
+      setExternalDrag(false)
+    }).then((u) => unlisteners.push(u))
+
+    listen<{ paths: string[] }>('tauri://drag-drop', async (e) => {
+      setExternalDrag(false)
+      for (const srcPath of e.payload.paths) {
+        await importPath(tmpPath, srcPath).catch(() => {})
+      }
+      const tree = await listProject(tmpPath)
+      setProjectTree(tree)
+    }).then((u) => unlisteners.push(u))
+
+    return () => unlisteners.forEach((u) => u())
+  }, [tmpPath, setProjectTree])
 
   const refreshTree = useCallback(async () => {
     if (!tmpPath) return
     const tree = await listProject(tmpPath)
     setProjectTree(tree)
   }, [tmpPath, setProjectTree])
+
+  async function handleMove(srcPath: string, destDir: string) {
+    if (!tmpPath) return
+    const name = srcPath.split('/').pop()!
+    const newPath = destDir ? `${destDir}/${name}` : name
+    const currentDir = srcPath.includes('/') ? srcPath.substring(0, srcPath.lastIndexOf('/')) : ''
+    if (currentDir === destDir) return
+    if (srcPath === destDir || destDir.startsWith(srcPath + '/')) return
+    await renamePath(tmpPath, srcPath, newPath)
+    renameOpenFile(srcPath, newPath)
+    await refreshTree()
+  }
 
   function openEntryMenu(e: React.MouseEvent, entry: ProjectEntry) {
     setMenu({ type: 'entry', x: e.clientX, y: e.clientY, entry })
@@ -100,7 +190,8 @@ export function FileTree() {
 
   async function handleCreateFile(parentDir: string, name: string) {
     if (!tmpPath) return
-    const rel = parentDir ? `${parentDir}/${name}` : name
+    const finalName = name.includes('.') ? name : `${name}.typ`
+    const rel = parentDir ? `${parentDir}/${finalName}` : finalName
     await createFile(tmpPath, rel)
     await refreshTree()
   }
@@ -119,6 +210,7 @@ export function FileTree() {
       : ''
     const newRel = parent ? `${parent}/${newName}` : newName
     await renamePath(tmpPath, entry.path, newRel)
+    renameOpenFile(entry.path, newRel)
     await refreshTree()
   }
 
@@ -164,18 +256,43 @@ export function FileTree() {
 
   return (
     <div
-      className="flex-1 overflow-auto"
+      className={`relative flex-1 overflow-auto transition-colors ${dragOver === '' ? 'bg-[#313244]/30' : ''}`}
       onContextMenu={openBackgroundMenu}
+      onDragOver={(e) => { e.preventDefault(); setDragOver('') }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null)
+      }}
+      onDrop={(e) => {
+        e.preventDefault()
+        const src = e.dataTransfer.getData('text/plain') || draggedPathRef.current
+        if (src) handleMove(src, '')
+        setDragOver(null)
+      }}
     >
       <div className="px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#585b70]">
         Projet
       </div>
 
       {projectTree.map((entry) => (
-        <TreeNode key={entry.path} entry={entry} onContextMenu={openEntryMenu} />
+        <TreeNode
+          key={entry.path}
+          entry={entry}
+          onContextMenu={openEntryMenu}
+          onMove={handleMove}
+          dragOver={dragOver}
+          setDragOver={setDragOver}
+          draggedPathRef={draggedPathRef}
+        />
       ))}
 
       <div className="min-h-[60px]" />
+
+      {externalDrag && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-[#1e1e2e]/80 border-2 border-dashed border-[#89b4fa] rounded-lg pointer-events-none m-1">
+          <div className="text-[#89b4fa] text-xs font-semibold">Déposer ici</div>
+          <div className="text-[#585b70] text-[10px]">Fichiers et dossiers</div>
+        </div>
+      )}
 
       {menu.type === 'background' && (
         <ContextMenu

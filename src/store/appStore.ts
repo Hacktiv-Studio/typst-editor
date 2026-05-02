@@ -55,6 +55,11 @@ export const useAppStore = create<AppState>()(
           openFiles: s.openFiles.map((f) => f.path === path ? { ...f, isDirty: false } : f),
           isDirty: s.openFiles.some((f) => f.path !== path && f.isDirty),
         })),
+      renameOpenFile: (oldPath, newPath) =>
+        set((s) => ({
+          openFiles: s.openFiles.map((f) => f.path === oldPath ? { ...f, path: newPath } : f),
+          activeFile: s.activeFile === oldPath ? newPath : s.activeFile,
+        })),
       setPages: (pages) => set({ pages }),
       setActivePage: (activePage) => set({ activePage }),
       setZoom: (zoom) => set({ zoom }),
