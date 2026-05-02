@@ -62,7 +62,7 @@ export function EditorPanel() {
 
   function handleCursorLine(line: number) {
     const map = sourceMapRef.current
-    if (map.length === 0) return
+    if (!map || map.length === 0) return
     let page = 0
     for (let i = 0; i < map.length; i++) {
       if (map[i] <= line) page = i
