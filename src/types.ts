@@ -39,7 +39,7 @@ export interface AppState {
 
   // Aperçu
   pages: string[]           // SVG raw strings
-  sourceMap: number[]       // index = page, value = min source line (0-based)
+  sourceMap: (number | null)[]  // index = page, null if page has no entry-file content
   activePage: number
   zoom: number
   showThumbnails: boolean
@@ -68,7 +68,7 @@ export interface AppState {
   markFileSaved: (path: string) => void
   renameOpenFile: (oldPath: string, newPath: string) => void
   setPages: (pages: string[]) => void
-  setSourceMap: (map: number[]) => void
+  setSourceMap: (map: (number | null)[]) => void
   setActivePage: (page: number) => void
   setZoom: (zoom: number) => void
   toggleThumbnails: () => void

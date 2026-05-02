@@ -13,7 +13,7 @@ export function EditorPanel() {
     setPages, setSourceMap, setCompiling, setCompileErrors, appendOutput, clearOutput,
     sourceMap, activePage, setActivePage,
   } = useAppStore()
-  const sourceMapRef = useRef<number[]>(sourceMap)
+  const sourceMapRef = useRef<(number | null)[]>(sourceMap)
   const activePageRef = useRef(activePage)
   useEffect(() => { sourceMapRef.current = sourceMap }, [sourceMap])
   useEffect(() => { activePageRef.current = activePage }, [activePage])
@@ -65,7 +65,8 @@ export function EditorPanel() {
     if (!map || map.length === 0) return
     let page = 0
     for (let i = 0; i < map.length; i++) {
-      if (map[i] <= line) page = i
+      const v = map[i]
+      if (v !== null && v !== undefined && v <= line) page = i
     }
     if (page !== activePageRef.current) setActivePage(page)
   }

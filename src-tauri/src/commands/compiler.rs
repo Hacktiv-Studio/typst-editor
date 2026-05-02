@@ -30,8 +30,9 @@ pub struct CompileResult {
     pub errors: Vec<CompileError>,
     pub output: String,
     /// For each page index: the minimum 0-based source line of the entry file
-    /// that appears on that page. Used by the editor to scroll the preview.
-    pub source_map: Vec<u32>,
+    /// that appears on that page, or null if that page has no content from the
+    /// entry file (e.g. content from an included file).
+    pub source_map: Vec<Option<u32>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -225,7 +226,7 @@ fn diagnostics_to_errors(
 // Helper: build source map (page index → min source line in entry file)
 // ---------------------------------------------------------------------------
 
-fn build_source_map(world: &TypstWorld, document: &PagedDocument) -> Vec<u32> {
+fn build_source_map(world: &TypstWorld, document: &PagedDocument) -> Vec<Option<u32>> {
     let n = document.pages.len();
     let mut page_min: Vec<Option<usize>> = vec![None; n];
 
@@ -233,16 +234,11 @@ fn build_source_map(world: &TypstWorld, document: &PagedDocument) -> Vec<u32> {
         collect_frame(world, &page.frame, page_idx, &mut page_min);
     }
 
-    // Forward-fill gaps so every page has a valid line number
-    let mut last = 0u32;
+    // Pages with no spans from the entry file stay null — do not forward-fill,
+    // as that causes pages from included files to inherit the wrong source line.
     page_min
         .iter()
-        .map(|opt| {
-            if let Some(line) = opt {
-                last = *line as u32;
-            }
-            last
-        })
+        .map(|opt| opt.map(|line| line as u32))
         .collect()
 }
 
