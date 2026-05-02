@@ -28,6 +28,8 @@ export function CodeMirrorEditor({ content, onChange, onSave }: Props) {
   const viewRef = useRef<EditorView | null>(null)
   const fontSizeRef = useRef(DEFAULT_FONT_SIZE)
   const fontCompartment = useRef(new Compartment())
+  const wrapCompartment = useRef(new Compartment())
+  const wrapRef = useRef(false)
 
   const onChangeRef = useRef(onChange)
   onChangeRef.current = onChange
@@ -45,6 +47,13 @@ export function CodeMirrorEditor({ content, onChange, onSave }: Props) {
         ...defaultKeymap,
         ...historyKeymap,
         { key: 'Mod-s', run: () => { onSaveRef.current(); return true } },
+        { key: 'Alt-z', run: (view) => {
+          wrapRef.current = !wrapRef.current
+          view.dispatch({ effects: wrapCompartment.current.reconfigure(
+            wrapRef.current ? EditorView.lineWrapping : []
+          )})
+          return true
+        }},
       ]),
       oneDark,
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
@@ -55,6 +64,7 @@ export function CodeMirrorEditor({ content, onChange, onSave }: Props) {
         }
       }),
       fontCompartment.current.of(fontTheme(fontSizeRef.current)),
+      wrapCompartment.current.of([]),
     ]
 
     const state = EditorState.create({ doc: content, extensions })
