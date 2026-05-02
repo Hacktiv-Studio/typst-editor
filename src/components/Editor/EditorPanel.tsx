@@ -10,8 +10,13 @@ export function EditorPanel() {
   const {
     activeFile, openFiles, tmpPath, entryFile,
     updateFileContent, markFileSaved,
-    setPages, setCompiling, setCompileErrors, appendOutput, clearOutput,
+    setPages, setSourceMap, setCompiling, setCompileErrors, appendOutput, clearOutput,
+    sourceMap, activePage, setActivePage,
   } = useAppStore()
+  const sourceMapRef = useRef<number[]>(sourceMap)
+  const activePageRef = useRef(activePage)
+  useEffect(() => { sourceMapRef.current = sourceMap }, [sourceMap])
+  useEffect(() => { activePageRef.current = activePage }, [activePage])
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeContent = openFiles.find((f) => f.path === activeFile)?.content ?? ''
@@ -23,6 +28,7 @@ export function EditorPanel() {
     try {
       const result = await compilePreview(tmpPath, entryFile)
       setPages(result.pages)
+      setSourceMap(result.sourceMap)
       setCompileErrors(result.errors)
       appendOutput(result.output)
       if (result.pages.length > 0) writePreviewCache(tmpPath, result.pages)
@@ -54,6 +60,16 @@ export function EditorPanel() {
     }, DEBOUNCE_MS)
   }
 
+  function handleCursorLine(line: number) {
+    const map = sourceMapRef.current
+    if (map.length === 0) return
+    let page = 0
+    for (let i = 0; i < map.length; i++) {
+      if (map[i] <= line) page = i
+    }
+    if (page !== activePageRef.current) setActivePage(page)
+  }
+
   async function handleSave() {
     if (!tmpPath || !activeFile) return
     const file = openFiles.find((f) => f.path === activeFile)
@@ -81,6 +97,7 @@ export function EditorPanel() {
           key={activeFile}
           content={activeContent}
           onChange={handleChange}
+          onCursorLine={handleCursorLine}
           onSave={handleSave}
         />
       </div>

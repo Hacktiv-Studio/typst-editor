@@ -13,6 +13,7 @@ export interface CompileResult {
   pages: string[]          // SVG strings
   errors: CompileError[]
   output: string
+  sourceMap: number[]      // index = page, value = min source line (0-based)
 }
 
 // ── Commandes projet ─────────────────────────────────────────

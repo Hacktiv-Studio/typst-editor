@@ -10,6 +10,7 @@ interface Props {
   content: string
   onChange: (content: string) => void
   onSave: () => void
+  onCursorLine?: (line: number) => void
 }
 
 const DEFAULT_FONT_SIZE = 14
@@ -23,7 +24,7 @@ function fontTheme(size: number) {
   })
 }
 
-export function CodeMirrorEditor({ content, onChange, onSave }: Props) {
+export function CodeMirrorEditor({ content, onChange, onSave, onCursorLine }: Props) {
   const containerRef = useRef<HTMLDivElement>(null)
   const viewRef = useRef<EditorView | null>(null)
   const fontSizeRef = useRef(DEFAULT_FONT_SIZE)
@@ -35,6 +36,8 @@ export function CodeMirrorEditor({ content, onChange, onSave }: Props) {
   onChangeRef.current = onChange
   const onSaveRef = useRef(onSave)
   onSaveRef.current = onSave
+  const onCursorLineRef = useRef(onCursorLine)
+  onCursorLineRef.current = onCursorLine
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -61,6 +64,10 @@ export function CodeMirrorEditor({ content, onChange, onSave }: Props) {
       EditorView.updateListener.of((update) => {
         if (update.docChanged) {
           onChangeRef.current(update.state.doc.toString())
+        }
+        if ((update.selectionSet || update.docChanged) && onCursorLineRef.current) {
+          const line = update.state.doc.lineAt(update.state.selection.main.head).number - 1
+          onCursorLineRef.current(line)
         }
       }),
       fontCompartment.current.of(fontTheme(fontSizeRef.current)),

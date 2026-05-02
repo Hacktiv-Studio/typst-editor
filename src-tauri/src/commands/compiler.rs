@@ -4,8 +4,8 @@ use chrono::Datelike;
 use serde::{Deserialize, Serialize};
 use typst::diag::{FileError, FileResult, SourceDiagnostic};
 use typst::foundations::{Bytes, Datetime};
-use typst::layout::PagedDocument;
-use typst::syntax::{FileId, VirtualPath, Source};
+use typst::layout::{Frame, FrameItem, PagedDocument};
+use typst::syntax::{FileId, Span, VirtualPath, Source};
 use typst::text::{Font, FontBook};
 use typst::utils::LazyHash;
 use typst::{Library, World};
@@ -28,6 +28,9 @@ pub struct CompileResult {
     pub pages: Vec<String>,
     pub errors: Vec<CompileError>,
     pub output: String,
+    /// For each page index: the minimum 0-based source line of the entry file
+    /// that appears on that page. Used by the editor to scroll the preview.
+    pub source_map: Vec<u32>,
 }
 
 // ---------------------------------------------------------------------------
@@ -218,6 +221,61 @@ fn diagnostics_to_errors(
 }
 
 // ---------------------------------------------------------------------------
+// Helper: build source map (page index → min source line in entry file)
+// ---------------------------------------------------------------------------
+
+fn build_source_map(world: &TypstWorld, document: &PagedDocument) -> Vec<u32> {
+    let n = document.pages.len();
+    let mut page_min: Vec<Option<usize>> = vec![None; n];
+
+    for (page_idx, page) in document.pages.iter().enumerate() {
+        collect_frame(world, &page.frame, page_idx, &mut page_min);
+    }
+
+    // Forward-fill gaps so every page has a valid line number
+    let mut last = 0u32;
+    page_min
+        .iter()
+        .map(|opt| {
+            if let Some(line) = opt {
+                last = *line as u32;
+            }
+            last
+        })
+        .collect()
+}
+
+fn collect_frame(world: &TypstWorld, frame: &Frame, page_idx: usize, map: &mut Vec<Option<usize>>) {
+    for (_, item) in frame.items() {
+        match item {
+            FrameItem::Text(text) => {
+                for glyph in &text.glyphs {
+                    record_span(world, glyph.span.0, page_idx, map);
+                }
+            }
+            FrameItem::Group(group) => {
+                collect_frame(world, &group.frame, page_idx, map);
+            }
+            FrameItem::Shape(_, span) => record_span(world, *span, page_idx, map),
+            FrameItem::Image(_, _, span) => record_span(world, *span, page_idx, map),
+            _ => {}
+        }
+    }
+}
+
+fn record_span(world: &TypstWorld, span: Span, page_idx: usize, map: &mut Vec<Option<usize>>) {
+    let Some(id) = span.id() else { return };
+    if id != world.main() { return }
+    let Ok(source) = world.source(id) else { return };
+    let Some(range) = source.range(span) else { return };
+    let line = source.byte_to_line(range.start).unwrap_or(0);
+    let entry = &mut map[page_idx];
+    if entry.is_none() || entry.unwrap() > line {
+        *entry = Some(line);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tauri commands
 // ---------------------------------------------------------------------------
 
@@ -241,11 +299,13 @@ pub async fn compile_preview(
                     .collect();
 
                 let warning_errors = diagnostics_to_errors(&world, &warned.warnings);
+                let source_map = build_source_map(&world, &document);
 
                 Ok(CompileResult {
                     pages,
                     errors: warning_errors,
                     output: String::new(),
+                    source_map,
                 })
             }
             Err(diags) => {
@@ -254,6 +314,7 @@ pub async fn compile_preview(
                     pages: vec![],
                     errors,
                     output: String::new(),
+                    source_map: vec![],
                 })
             }
         }
