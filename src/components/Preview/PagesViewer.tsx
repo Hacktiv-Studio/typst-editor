@@ -1,9 +1,43 @@
-import { useRef } from 'react'
+import { useRef, useEffect } from 'react'
 import { useAppStore } from '../../store/appStore'
 
 export function PagesViewer() {
   const { pages, activePage, zoom, setActivePage, tmpPath } = useAppStore()
   const containerRef = useRef<HTMLDivElement>(null)
+  const programmaticScrollRef = useRef(false)
+
+  // Scroll to page when activePage changes (e.g. from thumbnail click)
+  useEffect(() => {
+    const el = containerRef.current?.querySelector<HTMLElement>(`[data-page="${activePage}"]`)
+    if (!el) return
+    programmaticScrollRef.current = true
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setTimeout(() => { programmaticScrollRef.current = false }, 600)
+  }, [activePage])
+
+  // Update activePage from scroll position
+  useEffect(() => {
+    const container = containerRef.current
+    if (!container || pages.length === 0) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (programmaticScrollRef.current) return
+        const best = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0]
+        if (best) {
+          const idx = parseInt((best.target as HTMLElement).dataset.page ?? '0', 10)
+          setActivePage(idx)
+        }
+      },
+      { root: container, threshold: [0.25, 0.5, 0.75] }
+    )
+
+    const pageEls = container.querySelectorAll('[data-page]')
+    pageEls.forEach((el) => observer.observe(el))
+    return () => observer.disconnect()
+  }, [pages, setActivePage])
 
   if (!tmpPath) {
     return (
@@ -30,7 +64,7 @@ export function PagesViewer() {
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-auto bg-[#1a1a2e] flex flex-col items-center gap-4 py-5 px-4"
+      className="flex-1 overflow-auto bg-[#1a1a2e] flex flex-col items-center gap-8 py-6 px-4"
     >
       {pages.map((svg, i) => (
         <div

@@ -4,24 +4,29 @@ export function Thumbnails() {
   const { pages, activePage, setActivePage } = useAppStore()
 
   return (
-    <div className="w-[72px] bg-[#181825] border-l border-[#313244] overflow-y-auto flex flex-col items-center gap-2 py-2 flex-shrink-0">
+    <div className="w-[88px] bg-[#181825] border-l border-[#313244] overflow-y-auto flex flex-col items-center gap-2.5 py-3 flex-shrink-0">
       {pages.map((svg, i) => (
-        <div
+        <button
           key={i}
           onClick={() => setActivePage(i)}
-          className={`w-14 cursor-pointer rounded-sm overflow-hidden border-[1.5px] transition-colors flex-shrink-0 ${
-            i === activePage ? 'border-[#89b4fa]' : 'border-transparent hover:border-[#45475a]'
+          className={`w-[64px] rounded overflow-hidden border-2 transition-all flex-shrink-0 ${
+            i === activePage
+              ? 'border-[#89b4fa] shadow-lg shadow-[#89b4fa]/20'
+              : 'border-[#313244] hover:border-[#45475a]'
           }`}
         >
-          <div
-            dangerouslySetInnerHTML={{ __html: svg }}
-            className="w-full pointer-events-none"
-            style={{ transform: 'scale(0.18)', transformOrigin: 'top left', height: '76px', overflow: 'hidden' }}
+          <img
+            src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`}
+            alt={`Page ${i + 1}`}
+            className="w-full h-auto block"
+            draggable={false}
           />
-          <div className={`text-center text-[8px] py-0.5 ${i === activePage ? 'text-[#89b4fa]' : 'text-[#585b70]'}`}>
+          <div className={`text-center text-[9px] py-0.5 bg-[#181825] ${
+            i === activePage ? 'text-[#89b4fa]' : 'text-[#585b70]'
+          }`}>
             {i + 1}
           </div>
-        </div>
+        </button>
       ))}
     </div>
   )
