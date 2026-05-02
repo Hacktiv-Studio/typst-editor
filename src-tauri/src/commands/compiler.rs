@@ -24,6 +24,7 @@ pub struct CompileError {
 }
 
 #[derive(Debug, Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct CompileResult {
     pub pages: Vec<String>,
     pub errors: Vec<CompileError>,
