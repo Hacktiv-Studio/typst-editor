@@ -1,10 +1,20 @@
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { useAppStore } from '../../store/appStore'
 
 export function PagesViewer() {
   const { pages, activePage, zoom, setActivePage, tmpPath } = useAppStore()
   const containerRef = useRef<HTMLDivElement>(null)
   const programmaticScrollRef = useRef(false)
+  const [containerWidth, setContainerWidth] = useState(0)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    setContainerWidth(el.clientWidth)
+    const ro = new ResizeObserver(([entry]) => setContainerWidth(entry.contentRect.width))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   // Scroll to page when activePage changes (e.g. from thumbnail click)
   useEffect(() => {
@@ -61,6 +71,8 @@ export function PagesViewer() {
     )
   }
 
+  const pageWidth = containerWidth > 32 ? Math.round((containerWidth - 32) * zoom) : undefined
+
   return (
     <div
       ref={containerRef}
@@ -73,12 +85,12 @@ export function PagesViewer() {
           className={`relative flex-shrink-0 shadow-2xl rounded-sm cursor-pointer transition-shadow ${
             i === activePage ? 'ring-2 ring-[#89b4fa]' : ''
           }`}
-          style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
+          style={{ width: pageWidth }}
           onClick={() => setActivePage(i)}
         >
           <div
             dangerouslySetInnerHTML={{ __html: svg }}
-            className="bg-white block"
+            className="bg-white block [&>svg]:w-full [&>svg]:h-auto"
             style={{ lineHeight: 0 }}
           />
           <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-[#585b70] whitespace-nowrap">
