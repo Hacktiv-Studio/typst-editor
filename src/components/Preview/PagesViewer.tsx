@@ -5,16 +5,48 @@ export function PagesViewer() {
   const { pages, activePage, zoom, setActivePage, tmpPath } = useAppStore()
   const containerRef = useRef<HTMLDivElement>(null)
   const programmaticScrollRef = useRef(false)
-  const [containerWidth, setContainerWidth] = useState(0)
+  const zoomRef = useRef(zoom)
+  const [blobUrls, setBlobUrls] = useState<string[]>([])
 
+  // Keep zoomRef in sync so the ResizeObserver callback can read the latest value
+  useEffect(() => { zoomRef.current = zoom }, [zoom])
+
+  // Convert SVG strings to Blob URLs — much faster to scroll than inline SVG DOM
+  useEffect(() => {
+    const urls = pages.map((svg) =>
+      URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
+    )
+    setBlobUrls(urls)
+    return () => urls.forEach((url) => URL.revokeObjectURL(url))
+  }, [pages])
+
+  // Update --page-width CSS variable directly on the DOM (no React re-render on resize)
   useEffect(() => {
     const el = containerRef.current
     if (!el) return
-    setContainerWidth(el.clientWidth)
-    const ro = new ResizeObserver(([entry]) => setContainerWidth(entry.contentRect.width))
+
+    const update = () => {
+      const w = Math.round((el.clientWidth - 32) * zoomRef.current)
+      el.style.setProperty('--page-width', `${w}px`)
+    }
+
+    update()
+    let rafId = 0
+    const ro = new ResizeObserver(() => {
+      cancelAnimationFrame(rafId)
+      rafId = requestAnimationFrame(update)
+    })
     ro.observe(el)
-    return () => ro.disconnect()
+    return () => { ro.disconnect(); cancelAnimationFrame(rafId) }
   }, [])
+
+  // Re-apply --page-width when zoom changes
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const w = Math.round((el.clientWidth - 32) * zoom)
+    el.style.setProperty('--page-width', `${w}px`)
+  }, [zoom])
 
   // Scroll to page when activePage changes (e.g. from thumbnail click)
   useEffect(() => {
@@ -71,27 +103,26 @@ export function PagesViewer() {
     )
   }
 
-  const pageWidth = containerWidth > 32 ? Math.round((containerWidth - 32) * zoom) : undefined
-
   return (
     <div
       ref={containerRef}
       className="flex-1 overflow-auto bg-[#1a1a2e] flex flex-col items-center gap-8 py-6 px-4"
     >
-      {pages.map((svg, i) => (
+      {blobUrls.map((url, i) => (
         <div
           key={i}
           data-page={i}
-          className={`relative flex-shrink-0 shadow-2xl rounded-sm cursor-pointer transition-shadow ${
+          className={`relative flex-shrink-0 shadow-2xl rounded-sm cursor-pointer ${
             i === activePage ? 'ring-2 ring-[#89b4fa]' : ''
           }`}
-          style={{ width: pageWidth }}
+          style={{ width: 'var(--page-width)' }}
           onClick={() => setActivePage(i)}
         >
-          <div
-            dangerouslySetInnerHTML={{ __html: svg }}
-            className="bg-white block [&>svg]:w-full [&>svg]:h-auto"
-            style={{ lineHeight: 0 }}
+          <img
+            src={url}
+            alt={`Page ${i + 1}`}
+            className="w-full h-auto block bg-white"
+            draggable={false}
           />
           <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-[#585b70] whitespace-nowrap">
             Page {i + 1}
