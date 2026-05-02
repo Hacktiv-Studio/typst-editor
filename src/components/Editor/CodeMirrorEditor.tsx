@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { EditorState } from '@codemirror/state'
-import { EditorView, keymap } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
+import { EditorView, keymap, lineNumbers } from '@codemirror/view'
+import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
 import { oneDark } from '@codemirror/theme-one-dark'
 import { typstLanguage } from '../../lib/typst-language'
@@ -25,8 +25,10 @@ export function CodeMirrorEditor({ content, onChange, onSave }: Props) {
     if (!containerRef.current) return
 
     const extensions = [
+      lineNumbers(),
       history(),
       keymap.of([
+        indentWithTab,
         ...defaultKeymap,
         ...historyKeymap,
         { key: 'Mod-s', run: () => { onSaveRef.current(); return true } },
@@ -40,7 +42,7 @@ export function CodeMirrorEditor({ content, onChange, onSave }: Props) {
         }
       }),
       EditorView.theme({
-        '&': { height: '100%', fontSize: '12px' },
+        '&': { height: '100%', fontSize: '14px' },
         '.cm-scroller': { overflow: 'auto', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" },
       }),
     ]

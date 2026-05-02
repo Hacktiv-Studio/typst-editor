@@ -17,6 +17,7 @@ export function EditorTabs() {
           <div
             key={file.path}
             onClick={() => setActiveFile(file.path)}
+            onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeFile(file.path) } }}
             className={`flex items-center gap-1.5 px-3 h-full cursor-pointer text-[10px] border-r border-[#313244] flex-shrink-0 ${
               isActive
                 ? 'bg-[#1e1e2e] text-[#cdd6f4] border-t-2 border-t-[#89b4fa]'
