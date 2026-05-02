@@ -40,6 +40,11 @@
         "description": "Typst Project File",
         "role": "Editor"
       }
-    ]
+    ],
+    "linux": {
+      "deb": {
+        "desktopTemplate": "assets/typst-editor.desktop"
+      }
+    }
   }
 }

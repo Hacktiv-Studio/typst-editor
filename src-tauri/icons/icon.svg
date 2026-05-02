@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1e1e2e"/>
+      <stop offset="100%" stop-color="#181825"/>
+    </linearGradient>
+    <linearGradient id="tGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#b4befe"/>
+      <stop offset="100%" stop-color="#89b4fa"/>
+    </linearGradient>
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#74c7ec"/>
+      <stop offset="100%" stop-color="#89dceb"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="url(#bg)"/>
+
+  <!-- Subtle inner glow -->
+  <rect width="512" height="512" rx="96" fill="none" stroke="#313244" stroke-width="2"/>
+
+  <!-- Ambient glow behind T -->
+  <ellipse cx="256" cy="280" rx="180" ry="140" fill="#89b4fa" opacity="0.07"/>
+
+  <!-- T — horizontal bar -->
+  <rect x="84" y="108" width="344" height="82" rx="18" fill="url(#tGrad)"/>
+
+  <!-- T — vertical stem -->
+  <rect x="217" y="178" width="78" height="240" rx="18" fill="url(#tGrad)"/>
+
+  <!-- Accent bar — thin line at base of stem, suggests a document baseline -->
+  <rect x="148" y="430" width="216" height="10" rx="5" fill="url(#accentGrad)" opacity="0.8"/>
+
+  <!-- Dot accent — top right, like a typographic ornament -->
+  <circle cx="400" cy="120" r="18" fill="#f38ba8" opacity="0.9"/>
+</svg>

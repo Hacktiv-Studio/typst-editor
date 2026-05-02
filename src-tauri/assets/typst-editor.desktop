@@ -1,0 +1,12 @@
+[Desktop Entry]
+Categories={{categories}}
+Comment={{short_description}}
+Exec={{exec}} %U
+StartupWMClass={{product_name}}
+Icon={{icon}}
+Name=Typst Editor
+Terminal=false
+Type=Application
+{{#each mime_type}}
+MimeType={{this}};
+{{/each}}
