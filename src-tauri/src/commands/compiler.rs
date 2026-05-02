@@ -227,7 +227,7 @@ pub async fn compile_preview(
     entry_file: String,
 ) -> Result<CompileResult, String> {
     tokio::task::spawn_blocking(move || {
-        let root = PathBuf::from(&tmp_path);
+        let root = PathBuf::from(&tmp_path).join("data");
         let world = TypstWorld::new(root, &entry_file);
 
         let warned = typst::compile::<PagedDocument>(&world);
@@ -280,7 +280,7 @@ pub async fn export_project(
             }
         }
 
-        let root = PathBuf::from(&tmp_path);
+        let root = PathBuf::from(&tmp_path).join("data");
         let world = TypstWorld::new(root, &entry_file);
 
         let warned = typst::compile::<PagedDocument>(&world);

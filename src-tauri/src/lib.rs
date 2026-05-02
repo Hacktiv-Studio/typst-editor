@@ -1,7 +1,7 @@
 mod commands;
 
 use commands::{
-    filesystem::{list_project, create_file, create_folder, rename_path, delete_path, read_file, write_file, import_file, import_folder},
+    filesystem::{list_project, create_file, create_folder, rename_path, delete_path, read_file, write_file, import_file, import_folder, import_path, read_preview_cache, write_preview_cache},
     project::{new_project, open_project, save_project, cleanup_tmp},
     compiler::{compile_preview, export_project},
 };
@@ -25,7 +25,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_project, create_file, create_folder,
             rename_path, delete_path, read_file, write_file,
-            import_file, import_folder,
+            import_file, import_folder, import_path,
+            read_preview_cache, write_preview_cache,
             new_project, open_project, save_project, cleanup_tmp,
             compile_preview, export_project,
         ])

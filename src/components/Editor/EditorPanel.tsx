@@ -1,14 +1,14 @@
-import { useRef } from 'react'
+import { useRef, useCallback, useEffect } from 'react'
 import { EditorTabs } from './EditorTabs'
 import { CodeMirrorEditor } from './CodeMirrorEditor'
 import { useAppStore } from '../../store/appStore'
-import { writeFile, compilePreview, saveProject } from '../../tauri/commands'
+import { writeFile, compilePreview, readPreviewCache, writePreviewCache } from '../../tauri/commands'
 
 const DEBOUNCE_MS = 300
 
 export function EditorPanel() {
   const {
-    activeFile, openFiles, tmpPath, typzPath, entryFile,
+    activeFile, openFiles, tmpPath, entryFile,
     updateFileContent, markFileSaved,
     setPages, setCompiling, setCompileErrors, appendOutput, clearOutput,
   } = useAppStore()
@@ -16,7 +16,7 @@ export function EditorPanel() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const activeContent = openFiles.find((f) => f.path === activeFile)?.content ?? ''
 
-  async function runCompile() {
+  const runCompile = useCallback(async () => {
     if (!tmpPath) return
     setCompiling(true)
     clearOutput()
@@ -25,21 +25,33 @@ export function EditorPanel() {
       setPages(result.pages)
       setCompileErrors(result.errors)
       appendOutput(result.output)
+      if (result.pages.length > 0) writePreviewCache(tmpPath, result.pages)
     } catch (err) {
       appendOutput(String(err))
     } finally {
       setCompiling(false)
     }
-  }
+  }, [tmpPath, entryFile])
+
+  // On project open / session restore: show cache instantly, then compile in background
+  useEffect(() => {
+    if (!tmpPath) return
+    // Show cached pages instantly, then compile in background
+    readPreviewCache(tmpPath).then((cached) => {
+      if (cached && cached.length > 0) setPages(cached)
+    })
+    runCompile()
+  }, [tmpPath, runCompile])
 
   function handleChange(content: string) {
     if (!activeFile) return
     updateFileContent(activeFile, content)
-    if (tmpPath) {
-      writeFile(tmpPath, activeFile, content).catch(() => {})
-    }
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(runCompile, DEBOUNCE_MS)
+    debounceRef.current = setTimeout(async () => {
+      if (!tmpPath) return
+      await writeFile(tmpPath, activeFile, content).catch(() => {})
+      runCompile()
+    }, DEBOUNCE_MS)
   }
 
   async function handleSave() {
@@ -48,9 +60,6 @@ export function EditorPanel() {
     if (!file) return
     await writeFile(tmpPath, activeFile, file.content)
     markFileSaved(activeFile)
-    if (typzPath) {
-      await saveProject(tmpPath, typzPath)
-    }
   }
 
   if (!activeFile) {

@@ -86,3 +86,12 @@ export const importFile = (tmpPath: string, srcPath: string): Promise<string> =>
 
 export const importFolder = (tmpPath: string, srcPath: string): Promise<string> =>
   invoke('import_folder', { tmpPath, srcPath })
+
+export const importPath = (tmpPath: string, srcPath: string): Promise<string> =>
+  invoke('import_path', { tmpPath, srcPath })
+
+export const readPreviewCache = (tmpPath: string): Promise<string[] | null> =>
+  invoke('read_preview_cache', { tmpPath }).catch(() => null) as Promise<string[] | null>
+
+export const writePreviewCache = (tmpPath: string, pages: string[]): Promise<void> =>
+  invoke('write_preview_cache', { tmpPath, pages }).catch(() => {}) as Promise<void>

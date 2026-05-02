@@ -2,6 +2,10 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 use tauri::command;
 
+pub(crate) fn data_root(tmp_path: &str) -> PathBuf {
+    PathBuf::from(tmp_path).join("data")
+}
+
 pub(crate) fn safe_join(root: &std::path::Path, rel: &str) -> Result<std::path::PathBuf, String> {
     let mut result = root.to_path_buf();
     for component in std::path::Path::new(rel).components() {
@@ -59,7 +63,7 @@ pub fn build_tree(root: &std::path::Path, dir: &std::path::Path) -> Vec<ProjectE
 
 #[command]
 pub async fn list_project(tmp_path: String) -> Result<Vec<ProjectEntry>, String> {
-    let root = PathBuf::from(&tmp_path);
+    let root = data_root(&tmp_path);
     let tree = tokio::task::spawn_blocking(move || build_tree(&root, &root))
         .await
         .map_err(|e| e.to_string())?;
@@ -68,7 +72,7 @@ pub async fn list_project(tmp_path: String) -> Result<Vec<ProjectEntry>, String>
 
 #[command]
 pub async fn create_file(tmp_path: String, rel_path: String) -> Result<(), String> {
-    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
+    let path = safe_join(&data_root(&tmp_path), &rel_path)?;
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await.map_err(|e| e.to_string())?;
     }
@@ -77,13 +81,13 @@ pub async fn create_file(tmp_path: String, rel_path: String) -> Result<(), Strin
 
 #[command]
 pub async fn create_folder(tmp_path: String, rel_path: String) -> Result<(), String> {
-    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
+    let path = safe_join(&data_root(&tmp_path), &rel_path)?;
     tokio::fs::create_dir_all(&path).await.map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn rename_path(tmp_path: String, old_rel: String, new_rel: String) -> Result<(), String> {
-    let root = PathBuf::from(&tmp_path);
+    let root = data_root(&tmp_path);
     let old = safe_join(&root, &old_rel)?;
     let new = safe_join(&root, &new_rel)?;
     tokio::fs::rename(&old, &new).await.map_err(|e| e.to_string())
@@ -91,7 +95,7 @@ pub async fn rename_path(tmp_path: String, old_rel: String, new_rel: String) -> 
 
 #[command]
 pub async fn delete_path(tmp_path: String, rel_path: String) -> Result<(), String> {
-    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
+    let path = safe_join(&data_root(&tmp_path), &rel_path)?;
     tokio::task::spawn_blocking(move || {
         if path.is_dir() {
             std::fs::remove_dir_all(&path)
@@ -106,19 +110,32 @@ pub async fn delete_path(tmp_path: String, rel_path: String) -> Result<(), Strin
 
 #[command]
 pub async fn read_file(tmp_path: String, rel_path: String) -> Result<String, String> {
-    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
+    let path = safe_join(&data_root(&tmp_path), &rel_path)?;
     tokio::fs::read_to_string(&path).await.map_err(|e| e.to_string())
 }
 
 #[command]
 pub async fn write_file(tmp_path: String, rel_path: String, content: String) -> Result<(), String> {
-    let path = safe_join(&PathBuf::from(&tmp_path), &rel_path)?;
+    let path = safe_join(&data_root(&tmp_path), &rel_path)?;
     tokio::fs::write(&path, content).await.map_err(|e| e.to_string())
 }
 
 #[command]
+pub async fn import_path(tmp_path: String, src_path: String) -> Result<String, String> {
+    let src = PathBuf::from(&src_path);
+    let is_dir = tokio::fs::metadata(&src).await
+        .map(|m| m.is_dir())
+        .unwrap_or(false);
+    if is_dir {
+        import_folder(tmp_path, src_path).await
+    } else {
+        import_file(tmp_path, src_path).await
+    }
+}
+
+#[command]
 pub async fn import_file(tmp_path: String, src_path: String) -> Result<String, String> {
-    let root = PathBuf::from(&tmp_path);
+    let root = data_root(&tmp_path);
     let src = PathBuf::from(&src_path);
     let name = src.file_name()
         .ok_or_else(|| "invalid source path".to_string())?
@@ -131,7 +148,7 @@ pub async fn import_file(tmp_path: String, src_path: String) -> Result<String, S
 
 #[command]
 pub async fn import_folder(tmp_path: String, src_path: String) -> Result<String, String> {
-    let root = PathBuf::from(&tmp_path);
+    let root = data_root(&tmp_path);
     let src = PathBuf::from(&src_path);
     let name = src.file_name()
         .ok_or_else(|| "invalid source path".to_string())?
@@ -141,6 +158,28 @@ pub async fn import_folder(tmp_path: String, src_path: String) -> Result<String,
     copy_dir_recursive(&src, &dest).await
         .map_err(|e| e.to_string())?;
     Ok(name)
+}
+
+#[command]
+pub async fn read_preview_cache(tmp_path: String) -> Option<Vec<String>> {
+    let path = PathBuf::from(&tmp_path).join("cache").join("preview.json");
+    let raw = tokio::fs::read_to_string(&path).await.ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let pages = v["pages"].as_array()?
+        .iter()
+        .filter_map(|p| p.as_str().map(|s| s.to_string()))
+        .collect();
+    Some(pages)
+}
+
+#[command]
+pub async fn write_preview_cache(tmp_path: String, pages: Vec<String>) -> Result<(), String> {
+    let cache_dir = PathBuf::from(&tmp_path).join("cache");
+    tokio::fs::create_dir_all(&cache_dir).await.map_err(|e| e.to_string())?;
+    let json = serde_json::json!({ "pages": pages }).to_string();
+    tokio::fs::write(cache_dir.join("preview.json"), json)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 async fn copy_dir_recursive(src: &PathBuf, dest: &PathBuf) -> std::io::Result<()> {
@@ -167,10 +206,13 @@ mod tests {
     async fn test_create_and_read_file() {
         let dir = tempdir().unwrap();
         let tmp = dir.path().to_string_lossy().to_string();
+        // create_file now operates inside data/ subdirectory
         create_file(tmp.clone(), "main.typ".into()).await.unwrap();
         write_file(tmp.clone(), "main.typ".into(), "= Hello".into()).await.unwrap();
         let content = read_file(tmp.clone(), "main.typ".into()).await.unwrap();
         assert_eq!(content, "= Hello");
+        // Verify file is actually at tmpPath/data/main.typ
+        assert!(dir.path().join("data").join("main.typ").exists());
     }
 
     #[tokio::test]
@@ -202,5 +244,17 @@ mod tests {
         let result = create_file(tmp, "../../evil.txt".into()).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("traversal"));
+    }
+
+    #[tokio::test]
+    async fn test_preview_cache_roundtrip() {
+        let dir = tempdir().unwrap();
+        let tmp = dir.path().to_string_lossy().to_string();
+        let pages = vec!["<svg>page1</svg>".to_string(), "<svg>page2</svg>".to_string()];
+        write_preview_cache(tmp.clone(), pages.clone()).await.unwrap();
+        // Verify cache file location
+        assert!(dir.path().join("cache").join("preview.json").exists());
+        let result = read_preview_cache(tmp).await.unwrap();
+        assert_eq!(result, pages);
     }
 }

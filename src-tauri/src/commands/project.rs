@@ -50,10 +50,11 @@ fn validate_project_path(app: &AppHandle, path: &Path) -> Result<(), String> {
 
 /// Pure helper used by both the command and tests.
 async fn create_project_at(dir: PathBuf) -> Result<ProjectInfo, String> {
-    tokio::fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
-    tokio::fs::write(dir.join("main.typ"), "").await.map_err(|e| e.to_string())?;
-    let dir_for_tree = dir.clone();
-    let tree = tokio::task::spawn_blocking(move || build_tree(&dir_for_tree, &dir_for_tree))
+    let data_dir = dir.join("data");
+    tokio::fs::create_dir_all(&data_dir).await.map_err(|e| e.to_string())?;
+    tokio::fs::write(data_dir.join("main.typ"), "").await.map_err(|e| e.to_string())?;
+    let data_for_tree = data_dir.clone();
+    let tree = tokio::task::spawn_blocking(move || build_tree(&data_for_tree, &data_for_tree))
         .await
         .map_err(|e| e.to_string())?;
     Ok(ProjectInfo {
@@ -89,9 +90,10 @@ pub async fn open_project(
     if dir.exists() {
         tokio::fs::remove_dir_all(&dir).await.map_err(|e| e.to_string())?;
     }
-    tokio::fs::create_dir_all(&dir).await.map_err(|e| e.to_string())?;
+    let data_dir = dir.join("data");
+    tokio::fs::create_dir_all(&data_dir).await.map_err(|e| e.to_string())?;
 
-    let dir_clone = dir.clone();
+    let data_dir_clone = data_dir.clone();
     let typz_clone = typz.clone();
 
     tokio::task::spawn_blocking(move || -> Result<(), String> {
@@ -101,7 +103,7 @@ pub async fn open_project(
 
         for i in 0..total {
             let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
-            let outpath = safe_join(&dir_clone, entry.name()).map_err(|e| e.to_string())?;
+            let outpath = safe_join(&data_dir_clone, entry.name()).map_err(|e| e.to_string())?;
 
             if entry.name().ends_with('/') {
                 std::fs::create_dir_all(&outpath).map_err(|e| e.to_string())?;
@@ -124,8 +126,8 @@ pub async fn open_project(
     .await
     .map_err(|e| e.to_string())??;
 
-    let dir_for_tree = dir.clone();
-    let tree = tokio::task::spawn_blocking(move || build_tree(&dir_for_tree, &dir_for_tree))
+    let data_for_tree = data_dir.clone();
+    let tree = tokio::task::spawn_blocking(move || build_tree(&data_for_tree, &data_for_tree))
         .await
         .map_err(|e| e.to_string())?;
     Ok(ProjectInfo {
@@ -143,12 +145,13 @@ pub async fn save_project(
     let tmp = PathBuf::from(&tmp_path);
     validate_project_path(&app, &tmp)?;
     let typz = PathBuf::from(&typz_path);
+    let data_dir = tmp.join("data");
 
     tokio::task::spawn_blocking(move || -> Result<(), String> {
-        let entries: Vec<_> = WalkDir::new(&tmp)
+        let entries: Vec<_> = WalkDir::new(&data_dir)
             .into_iter()
             .filter_map(|e| e.ok())
-            .filter(|e| e.path() != tmp)
+            .filter(|e| e.path() != data_dir)
             .collect();
         let total = entries.len();
 
@@ -160,7 +163,7 @@ pub async fn save_project(
         for (i, entry) in entries.iter().enumerate() {
             let path = entry.path();
             let rel = path
-                .strip_prefix(&tmp)
+                .strip_prefix(&data_dir)
                 .unwrap_or(path)
                 .to_string_lossy()
                 .to_string();
@@ -206,7 +209,8 @@ mod tests {
         let base = tempfile::tempdir().unwrap();
         let dir = base.path().join("test-proj-123");
         let project = create_project_at(dir).await.unwrap();
-        let main = PathBuf::from(&project.tmp_path).join("main.typ");
+        // main.typ lives in tmpPath/data/
+        let main = PathBuf::from(&project.tmp_path).join("data").join("main.typ");
         assert!(main.exists());
         assert!(project.tree.iter().any(|e| e.name == "main.typ"));
     }
