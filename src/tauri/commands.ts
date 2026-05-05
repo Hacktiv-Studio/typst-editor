@@ -122,6 +122,9 @@ export const listCachedPackages = (): Promise<CachedPackage[]> =>
 export const listUniversePackages = (): Promise<CachedPackage[]> =>
   invoke('list_universe_packages')
 
+export const listFonts = (): Promise<string[]> =>
+  invoke('list_fonts')
+
 // ── IDE / Language intelligence ──────────────────────────────
 
 export interface CompletionItem {

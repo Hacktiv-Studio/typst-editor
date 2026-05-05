@@ -15,7 +15,7 @@ import { typstLanguage } from "../../lib/typst-language";
 import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import type { CompileError } from "../../types";
 import { useAppStore } from "../../store/appStore";
-import { getCompletions, getTooltip, listCachedPackages, listUniversePackages } from "../../tauri/commands";
+import { getCompletions, getTooltip, listCachedPackages, listUniversePackages, listFonts } from "../../tauri/commands";
 import type { CachedPackage } from "../../tauri/commands";
 
 // ---------------------------------------------------------------------------
@@ -200,6 +200,37 @@ function fetchAllPackages(): Promise<CachedPackage[]> {
     }
   )
   return pkgCachePromise
+}
+
+let fontCachePromise: Promise<string[]> | null = null
+function fetchFonts(): Promise<string[]> {
+  if (!fontCachePromise) fontCachePromise = listFonts().catch(() => [])
+  return fontCachePromise
+}
+
+async function fontCompletionSource(context: CompletionContext) {
+  const line = context.state.doc.lineAt(context.pos)
+  const textBefore = line.text.slice(0, context.pos - line.from)
+
+  // Detect: cursor is inside an open string (odd number of " before cursor)
+  const quoteCount = (textBefore.match(/"/g) ?? []).length
+  if (quoteCount % 2 === 0) return null
+
+  // The opening " of the current string is the last " in textBefore
+  const openIdx = textBefore.lastIndexOf('"')
+  // Text before the opening quote must reference a font parameter
+  const beforeQuote = textBefore.slice(0, openIdx)
+  if (!/\bfont[-\w]*\s*:/.test(beforeQuote)) return null
+
+  const partial = textBefore.slice(openIdx + 1).toLowerCase()
+  const from = line.from + openIdx + 1
+
+  const fonts = await fetchFonts()
+  const options = fonts
+    .filter((f) => !partial || f.toLowerCase().includes(partial))
+    .map((f) => ({ label: f, type: 'text' as const }))
+
+  return options.length > 0 ? { from, options, validFor: /^[^"]*$/ } : null
 }
 
 // ---------------------------------------------------------------------------
@@ -591,6 +622,8 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
           override: [
             // Fast local source: fires automatically when typing # + identifier
             typstLocalCompletionSource,
+            // Font name completions inside font: "..." strings
+            fontCompletionSource,
             // IDE-aware source: fires on explicit (Ctrl+Space) OR when in a # context
             async (context) => {
               const line = context.state.doc.lineAt(context.pos)

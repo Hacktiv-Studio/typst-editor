@@ -442,6 +442,15 @@ fn typst_package_cache_dir() -> PathBuf {
 }
 
 #[tauri::command]
+pub async fn list_fonts(font_cache: tauri::State<'_, FontCache>) -> Result<Vec<String>, String> {
+    let mut families: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for font in font_cache.fonts.iter() {
+        families.insert(font.info().family.to_string());
+    }
+    Ok(families.into_iter().collect())
+}
+
+#[tauri::command]
 pub async fn list_cached_packages() -> Vec<CachedPackage> {
     tokio::task::spawn_blocking(|| {
         let cache = typst_package_cache_dir();
