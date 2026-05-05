@@ -1,5 +1,5 @@
 export interface OpenFile {
-  path: string       // chemin relatif depuis la racine du projet
+  path: string
   content: string
   isDirty: boolean
 }
@@ -14,7 +14,7 @@ export interface CompileError {
 
 export interface ProjectEntry {
   name: string
-  path: string       // chemin relatif
+  path: string
   isDir: boolean
   children?: ProjectEntry[]
 }
@@ -38,8 +38,8 @@ export interface AppState {
   activeFile: string | null
 
   // Aperçu
-  pages: string[]           // SVG raw strings
-  sourceMap: (number | null)[]  // index = page, null if page has no entry-file content
+  pages: string[]
+  sourceMap: Record<string, (number | null)[]>
   activePage: number
   zoom: number
   showThumbnails: boolean
@@ -51,11 +51,16 @@ export interface AppState {
   projectTree: ProjectEntry[]
 
   // UI
+  language: 'fr' | 'en'
   explorerVisible: boolean
   previewVisible: boolean
   diagnosticsVisible: boolean
+  searchVisible: boolean
+  versionsModalOpen: boolean
   diagnosticsHeight: number
   progress: ProgressState
+  recentProjects: string[]
+  pendingJump: { file: string; byteOffset: number } | null
 
   // Actions
   setProject: (tmpPath: string, typzPath: string | null, entryFile: string, tree: ProjectEntry[]) => void
@@ -68,7 +73,8 @@ export interface AppState {
   markFileSaved: (path: string) => void
   renameOpenFile: (oldPath: string, newPath: string) => void
   setPages: (pages: string[]) => void
-  setSourceMap: (map: (number | null)[]) => void
+  applyPagesDelta: (pageCount: number, updates: { index: number; svg: string }[]) => void
+  setSourceMap: (map: Record<string, (number | null)[]>) => void
   setActivePage: (page: number) => void
   setZoom: (zoom: number) => void
   toggleThumbnails: () => void
@@ -77,9 +83,16 @@ export interface AppState {
   appendOutput: (line: string) => void
   clearOutput: () => void
   setProjectTree: (tree: ProjectEntry[]) => void
+  setLanguage: (language: 'fr' | 'en') => void
   toggleExplorer: () => void
   togglePreview: () => void
   toggleDiagnostics: () => void
+  toggleSearch: () => void
+  openVersionsModal: () => void
+  closeVersionsModal: () => void
   setDiagnosticsHeight: (h: number) => void
   setProgress: (p: Partial<ProgressState>) => void
+  addRecentProject: (path: string) => void
+  removeRecentProject: (path: string) => void
+  setPendingJump: (jump: { file: string; byteOffset: number } | null) => void
 }

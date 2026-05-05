@@ -26,6 +26,7 @@ import {
   saveProject,
   writeFile,
   cleanupTmp,
+  createVersion,
 } from "../tauri/commands";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { Dialog } from "./ui/Dialog";
@@ -62,8 +63,7 @@ export function Sidebar() {
     removeRecentProject,
     toggleSearch,
     searchVisible,
-    toggleHistory,
-    historyVisible,
+    openVersionsModal,
     language,
     setLanguage,
   } = useAppStore();
@@ -216,6 +216,7 @@ export function Sidebar() {
         markFileSaved(file.path);
       }
       await saveProject(tmpPath, typzPath);
+      createVersion(tmpPath).catch(() => {});
     } else {
       await handleSaveAs();
     }
@@ -394,13 +395,9 @@ export function Sidebar() {
         </button>
         <button
           title={t("sidebar.history")}
-          onClick={toggleHistory}
+          onClick={openVersionsModal}
           disabled={!tmpPath}
-          className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
-            historyVisible
-              ? "bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]"
-              : "text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]"
-          }`}
+          className="w-8 h-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]"
         >
           <FaClockRotateLeft size={13} />
         </button>

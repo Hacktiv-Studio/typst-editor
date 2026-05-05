@@ -5627,6 +5627,7 @@ name = "typst-editor"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "comemo",
  "fontdb",
  "notify",
  "rayon",

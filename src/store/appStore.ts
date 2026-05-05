@@ -35,7 +35,7 @@ export const useAppStore = create<AppState>()(
       previewVisible: true,
       diagnosticsVisible: false,
       searchVisible: false,
-      historyVisible: false,
+      versionsModalOpen: false,
       diagnosticsHeight: 180,
       progress: DEFAULT_PROGRESS,
       pendingJump: null,
@@ -133,7 +133,8 @@ export const useAppStore = create<AppState>()(
       toggleDiagnostics: () =>
         set((s) => ({ diagnosticsVisible: !s.diagnosticsVisible })),
       toggleSearch: () => set((s) => ({ searchVisible: !s.searchVisible })),
-      toggleHistory: () => set((s) => ({ historyVisible: !s.historyVisible })),
+      openVersionsModal: () => set({ versionsModalOpen: true }),
+      closeVersionsModal: () => set({ versionsModalOpen: false }),
       setDiagnosticsHeight: (diagnosticsHeight) => set({ diagnosticsHeight }),
       setProgress: (p) => set((s) => ({ progress: { ...s.progress, ...p } })),
       setPendingJump: (pendingJump) => set({ pendingJump }),

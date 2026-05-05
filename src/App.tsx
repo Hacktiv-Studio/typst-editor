@@ -6,11 +6,13 @@ import { EditorPanel } from './components/Editor/EditorPanel'
 import { PreviewPanel } from './components/Preview/PreviewPanel'
 import { DiagnosticsPanel } from './components/Diagnostics/DiagnosticsPanel'
 import { ProgressModal } from './components/ProgressModal'
+import { GlobalSearch } from './components/Search/GlobalSearch'
+import { VersionsModal } from './components/History/VersionsModal'
 import { useAppStore } from './store/appStore'
 import { listProject, onProgress, readFile } from './tauri/commands'
 
 export default function App() {
-  const { explorerVisible, previewVisible, diagnosticsVisible, setProgress } = useAppStore()
+  const { explorerVisible, previewVisible, diagnosticsVisible, searchVisible, toggleSearch, versionsModalOpen, closeVersionsModal, setProgress } = useAppStore()
 
   const horizontalLayout = useDefaultLayout({
     id: 'h-panels',
@@ -128,6 +130,8 @@ export default function App() {
       </div>
 
       <ProgressModal />
+      {searchVisible && <GlobalSearch onClose={toggleSearch} />}
+      {versionsModalOpen && <VersionsModal onClose={closeVersionsModal} />}
     </div>
   )
 }
