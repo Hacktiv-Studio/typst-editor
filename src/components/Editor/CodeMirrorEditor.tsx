@@ -153,6 +153,59 @@ const DEFAULT_FONT_SIZE = 14;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 32;
 
+const completionTheme = EditorView.theme({
+  ".cm-tooltip": {
+    border: "1px solid #45475a",
+    borderRadius: "8px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+    overflow: "hidden",
+  },
+  ".cm-tooltip.cm-tooltip-autocomplete": {
+    background: "#1e1e2e",
+    padding: "4px",
+  },
+  ".cm-tooltip-autocomplete > ul": {
+    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    fontSize: "12px",
+    maxHeight: "220px",
+  },
+  ".cm-tooltip-autocomplete > ul > li": {
+    display: "flex",
+    alignItems: "center",
+    padding: "3px 8px",
+    borderRadius: "5px",
+    color: "#cdd6f4",
+    lineHeight: "1.6",
+  },
+  ".cm-tooltip-autocomplete > ul > li[aria-selected='true']": {
+    background: "#313244",
+    color: "#cdd6f4",
+  },
+  ".cm-completionMatchedText": {
+    textDecoration: "none",
+    color: "#89b4fa",
+    fontWeight: "600",
+  },
+  ".cm-completionDetail": {
+    marginLeft: "auto",
+    paddingLeft: "12px",
+    fontSize: "11px",
+    color: "#585b70",
+    fontStyle: "normal",
+  },
+  ".cm-completionIcon": {
+    paddingRight: "6px",
+    fontSize: "11px",
+    opacity: "0.7",
+    width: "16px",
+  },
+  ".cm-completionIcon-function::after":  { content: "'ƒ'", color: "#cba6f7" },
+  ".cm-completionIcon-variable::after":  { content: "'𝑥'", color: "#89dceb" },
+  ".cm-completionIcon-keyword::after":   { content: "'k'", color: "#89b4fa" },
+  ".cm-completionIcon-type::after":      { content: "'T'", color: "#a6e3a1" },
+  ".cm-completionIcon-file::after":      { content: "'📄'", fontSize: "10px" },
+}, { dark: true })
+
 function fontTheme(size: number) {
   return EditorView.theme({
     "&": { height: "100%", fontSize: `${size}px` },
@@ -395,6 +448,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
           }
         }),
         oneDark,
+        completionTheme,
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         typstLanguage,
         EditorView.updateListener.of((update) => {
