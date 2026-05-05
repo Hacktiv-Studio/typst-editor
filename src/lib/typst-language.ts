@@ -133,6 +133,11 @@ const typstLanguage = StreamLanguage.define<State>({
       return 'number'
     }
 
+    // Bare function call: identifier( — in code mode without #
+    if (stream.match(/^[a-zA-Z_][a-zA-Z0-9_-]*(?=\()/)) {
+      return 'builtin'
+    }
+
     stream.next()
     return null
   },
