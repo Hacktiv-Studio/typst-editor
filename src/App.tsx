@@ -1,5 +1,6 @@
 import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels'
 import { useEffect } from 'react'
+import { emit } from '@tauri-apps/api/event'
 import { Sidebar } from './components/Sidebar'
 import { Explorer } from './components/Explorer/Explorer'
 import { EditorPanel } from './components/Editor/EditorPanel'
@@ -12,7 +13,7 @@ import { useAppStore } from './store/appStore'
 import { listProject, onProgress, readFile } from './tauri/commands'
 
 export default function App() {
-  const { explorerVisible, previewVisible, diagnosticsVisible, searchVisible, toggleSearch, versionsModalOpen, closeVersionsModal, setProgress } = useAppStore()
+  const { explorerVisible, previewVisible, diagnosticsVisible, searchVisible, toggleSearch, versionsModalOpen, closeVersionsModal, setProgress, activePage } = useAppStore()
 
   const horizontalLayout = useDefaultLayout({
     id: 'h-panels',
@@ -29,6 +30,10 @@ export default function App() {
     id: 'v-panels',
     panelIds: diagnosticsVisible ? ['main', 'diagnostics'] : ['main'],
   })
+
+  useEffect(() => {
+    emit('active-page-changed', activePage).catch(() => {})
+  }, [activePage])
 
   useEffect(() => {
     let unlisten: (() => void) | undefined

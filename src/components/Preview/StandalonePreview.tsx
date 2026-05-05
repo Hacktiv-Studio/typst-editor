@@ -45,6 +45,11 @@ export function StandalonePreview() {
 
     refresh();
 
+    let unlistenPage: (() => void) | undefined;
+    listen<number>("active-page-changed", (e) => {
+      useAppStore.setState({ activePage: e.payload });
+    }).then((fn) => { unlistenPage = fn; });
+
     let unlistenStart: (() => void) | undefined;
     listen<unknown>("compilation-started", () => {
       useAppStore.setState({ isCompiling: true });
@@ -66,6 +71,7 @@ export function StandalonePreview() {
 
     return () => {
       unlistenClose.then((fn) => fn?.());
+      unlistenPage?.();
       unlistenStart?.();
       unlistenCompile?.();
       unlistenTmpPath?.();
