@@ -1,118 +1,501 @@
-import { useEffect, useRef } from 'react'
-import { Compartment, EditorState } from '@codemirror/state'
-import { EditorView, keymap, lineNumbers } from '@codemirror/view'
-import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
-import { syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language'
-import { oneDark } from '@codemirror/theme-one-dark'
-import { typstLanguage } from '../../lib/typst-language'
+import { forwardRef, useEffect, useImperativeHandle, useRef, useCallback } from "react";
+import { Compartment, EditorState, StateEffect, StateField } from "@codemirror/state";
+import { Decoration, EditorView, highlightSpecialChars, hoverTooltip, keymap, lineNumbers, scrollPastEnd } from "@codemirror/view";
+import type { DecorationSet } from "@codemirror/view";
+import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, foldKeymap, foldService } from "@codemirror/language";
+import { setDiagnostics, lintGutter } from "@codemirror/lint";
+import type { Diagnostic } from "@codemirror/lint";
+import { autocompletion } from "@codemirror/autocomplete";
+import type { CompletionContext } from "@codemirror/autocomplete";
+import { oneDark } from "@codemirror/theme-one-dark";
+import { typstLanguage } from "../../lib/typst-language";
+import type { CompileError } from "../../types";
+import { useAppStore } from "../../store/appStore";
+import { getCompletions, getTooltip, listCachedPackages, listUniversePackages } from "../../tauri/commands";
+import type { CachedPackage } from "../../tauri/commands";
 
-interface Props {
-  content: string
-  onChange: (content: string) => void
-  onSave: () => void
-  onCursorLine?: (line: number) => void
+// ---------------------------------------------------------------------------
+// Ctrl-hover link decoration
+// ---------------------------------------------------------------------------
+
+const setCtrlLink = StateEffect.define<{ from: number; to: number } | null>();
+
+const ctrlLinkField = StateField.define<DecorationSet>({
+  create: () => Decoration.none,
+  update(deco, tr) {
+    for (const e of tr.effects) {
+      if (e.is(setCtrlLink)) {
+        if (e.value) {
+          return Decoration.set([
+            Decoration.mark({ class: "cm-ctrl-link" }).range(
+              e.value.from,
+              e.value.to,
+            ),
+          ]);
+        }
+        return Decoration.none;
+      }
+    }
+    return deco.map(tr.changes);
+  },
+  provide: (f) => EditorView.decorations.from(f),
+});
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Package completion helpers
+// ---------------------------------------------------------------------------
+
+function flattenProjectTree(tree: { path: string; isDir: boolean; children?: typeof tree }[]): string[] {
+  const files: string[] = []
+  function walk(entries: typeof tree) {
+    for (const e of entries) {
+      if (!e.isDir) files.push(e.path)
+      if (e.children) walk(e.children)
+    }
+  }
+  walk(tree)
+  return files
 }
 
-const DEFAULT_FONT_SIZE = 14
-const MIN_FONT_SIZE = 8
-const MAX_FONT_SIZE = 32
+function relativeImportPath(from: string, to: string): string {
+  const fromParts = from.split('/').slice(0, -1)
+  const toParts = to.split('/')
+  let common = 0
+  while (common < fromParts.length && common < toParts.length && fromParts[common] === toParts[common]) {
+    common++
+  }
+  const ups = fromParts.length - common
+  const rel = [...Array(ups).fill('..'), ...toParts.slice(common)].join('/')
+  return rel.startsWith('.') ? rel : './' + rel
+}
+
+let pkgCachePromise: Promise<CachedPackage[]> | null = null
+function fetchAllPackages(): Promise<CachedPackage[]> {
+  if (pkgCachePromise) return pkgCachePromise
+  pkgCachePromise = Promise.all([listCachedPackages(), listUniversePackages()]).then(
+    ([cached, universe]) => {
+      const seen = new Set(cached.map((p) => `@${p.namespace}/${p.name}`))
+      return [...cached, ...universe.filter((p) => !seen.has(`@${p.namespace}/${p.name}`))]
+    }
+  )
+  return pkgCachePromise
+}
+
+// ---------------------------------------------------------------------------
+
+interface Props {
+  content: string;
+  onChange: (content: string) => void;
+  onSave: () => void;
+  onCursorLine?: (line: number) => void;
+  onGotoDefinition?: (cursorByte: number) => void;
+  initialOffset?: number;
+  initialScrollTop?: number;
+  onScrollTop?: (y: number) => void;
+  onMounted?: () => void;
+  tmpPath?: string | null;
+  entryFile?: string;
+  currentFile?: string | null;
+}
+
+export interface CodeMirrorEditorHandle {
+  jumpTo: (byteOffset: number) => void;
+  applyErrors: (errors: CompileError[]) => void;
+}
+
+// ---------------------------------------------------------------------------
+// Typst-aware fold service — folds from { or [ at line end to matching close
+// ---------------------------------------------------------------------------
+
+const typstFoldService = foldService.of((state, _lineStart, lineEnd) => {
+  const line = state.doc.lineAt(lineEnd === 0 ? 0 : lineEnd - 1)
+  const text = line.text.trimEnd()
+  const last = text[text.length - 1]
+  if (last !== '{' && last !== '[') return null
+  const close = last === '{' ? '}' : ']'
+  let depth = 0
+  for (let pos = lineEnd; pos < state.doc.length; pos++) {
+    const ch = state.doc.sliceString(pos, pos + 1)
+    if (ch === last) depth++
+    else if (ch === close) {
+      if (depth === 0) {
+        const cl = state.doc.lineAt(pos)
+        return cl.from > lineEnd ? { from: lineEnd, to: cl.from - 1 } : null
+      }
+      depth--
+    }
+  }
+  return null
+})
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function byteOffsetToPos(
+  doc: { toString(): string; length: number },
+  byteOffset: number,
+): number {
+  const text = doc.toString();
+  const bytes = new TextEncoder().encode(text);
+  if (byteOffset >= bytes.length) return doc.length;
+  return new TextDecoder().decode(bytes.slice(0, byteOffset)).length;
+}
+
+const DEFAULT_FONT_SIZE = 14;
+const MIN_FONT_SIZE = 8;
+const MAX_FONT_SIZE = 32;
 
 function fontTheme(size: number) {
   return EditorView.theme({
-    '&': { height: '100%', fontSize: `${size}px` },
-    '.cm-scroller': { overflow: 'auto', fontFamily: "'JetBrains Mono', 'Fira Code', monospace" },
-  })
+    "&": { height: "100%", fontSize: `${size}px` },
+    ".cm-scroller": {
+      overflow: "auto",
+      fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+    },
+    ".cm-ctrl-link": { textDecoration: "underline", cursor: "pointer" },
+  });
 }
 
-export function CodeMirrorEditor({ content, onChange, onSave, onCursorLine }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const viewRef = useRef<EditorView | null>(null)
-  const fontSizeRef = useRef(DEFAULT_FONT_SIZE)
-  const fontCompartment = useRef(new Compartment())
-  const wrapCompartment = useRef(new Compartment())
-  const wrapRef = useRef(false)
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
-  const onChangeRef = useRef(onChange)
-  onChangeRef.current = onChange
-  const onSaveRef = useRef(onSave)
-  onSaveRef.current = onSave
-  const onCursorLineRef = useRef(onCursorLine)
-  onCursorLineRef.current = onCursorLine
+export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
+  function CodeMirrorEditor(
+    {
+      content,
+      onChange,
+      onSave,
+      onCursorLine,
+      onGotoDefinition,
+      initialOffset,
+      initialScrollTop,
+      onScrollTop,
+      onMounted,
+      currentFile,
+      tmpPath,
+      entryFile,
+    },
+    ref,
+  ) {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const viewRef = useRef<EditorView | null>(null);
+    const currentFileRef = useRef(currentFile);
+    currentFileRef.current = currentFile;
+    const tmpPathRef = useRef(tmpPath);
+    tmpPathRef.current = tmpPath;
+    const entryFileRef = useRef(entryFile);
+    entryFileRef.current = entryFile;
+    const projectTree = useAppStore((s) => s.projectTree);
+    const fontSizeRef = useRef(DEFAULT_FONT_SIZE);
+    const fontCompartment = useRef(new Compartment());
+    const wrapCompartment = useRef(new Compartment());
+    const wrapRef = useRef(false);
 
-  useEffect(() => {
-    if (!containerRef.current) return
+    const onChangeRef = useRef(onChange);
+    onChangeRef.current = onChange;
+    const onSaveRef = useRef(onSave);
+    onSaveRef.current = onSave;
+    const onCursorLineRef = useRef(onCursorLine);
+    onCursorLineRef.current = onCursorLine;
+    const onGotoDefRef = useRef(onGotoDefinition);
+    onGotoDefRef.current = onGotoDefinition;
+    const onMountedRef = useRef(onMounted);
+    onMountedRef.current = onMounted;
+    const onScrollTopRef = useRef(onScrollTop);
+    onScrollTopRef.current = onScrollTop;
 
-    const extensions = [
-      lineNumbers(),
-      history(),
-      keymap.of([
-        indentWithTab,
-        ...defaultKeymap,
-        ...historyKeymap,
-        { key: 'Mod-s', run: () => { onSaveRef.current(); return true } },
-        { key: 'Alt-z', run: (view) => {
-          wrapRef.current = !wrapRef.current
-          view.dispatch({ effects: wrapCompartment.current.reconfigure(
-            wrapRef.current ? EditorView.lineWrapping : []
-          )})
-          return true
-        }},
-      ]),
-      oneDark,
-      syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
-      typstLanguage,
-      EditorView.updateListener.of((update) => {
-        if (update.docChanged) {
-          onChangeRef.current(update.state.doc.toString())
-        }
-        if ((update.selectionSet || update.docChanged) && onCursorLineRef.current) {
-          const line = update.state.doc.lineAt(update.state.selection.main.head).number - 1
-          onCursorLineRef.current(line)
-        }
-      }),
-      fontCompartment.current.of(fontTheme(fontSizeRef.current)),
-      wrapCompartment.current.of([]),
-    ]
+    useImperativeHandle(ref, () => ({
+      jumpTo: (byteOffset: number) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const pos = byteOffsetToPos(view.state.doc, byteOffset);
+        view.dispatch({
+          selection: { anchor: pos },
+          effects: EditorView.scrollIntoView(pos, { y: "center" }),
+        });
+      },
+      applyErrors: (errors: CompileError[]) => {
+        const view = viewRef.current;
+        if (!view) return;
+        const diagnostics: Diagnostic[] = errors.flatMap((e) => {
+          try {
+            const line = view.state.doc.line(Math.max(1, e.line + 1));
+            const from = Math.min(
+              line.from + Math.max(0, e.col),
+              line.to,
+            );
+            return [
+              {
+                from,
+                to: from,
+                severity: e.severity,
+                message: e.message,
+              },
+            ];
+          } catch {
+            return [];
+          }
+        });
+        view.dispatch(setDiagnostics(view.state, diagnostics));
+      },
+    }));
 
-    const state = EditorState.create({ doc: content, extensions })
-    const view = new EditorView({ state, parent: containerRef.current })
-    viewRef.current = view
+    const importCompletionSource = useCallback(async (context: CompletionContext) => {
+      const lineStart = context.state.doc.lineAt(context.pos).from
+      const before = context.state.doc.sliceString(lineStart, context.pos)
+      const m = before.match(/#(?:import|include)\s+"([^"]*)$/)
+      if (!m) return null
+      const partial = m[1]
+      const from = context.pos - partial.length
 
-    return () => { view.destroy(); viewRef.current = null }
-  }, [])
+      if (partial.startsWith('@')) {
+        const packages = await fetchAllPackages()
+        const options = packages
+          .filter((p) => context.explicit || `@${p.namespace}/${p.name}`.startsWith(partial))
+          .map((p) => ({
+            label: `@${p.namespace}/${p.name}:${p.version}`,
+            type: 'keyword' as const,
+            detail: p.namespace,
+          }))
+        return options.length > 0 || context.explicit ? { from, options, validFor: /^[^"]*$/ } : null
+      }
 
-  // Ctrl+wheel → adjust font size without React re-render
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el) return
+      const cf = currentFileRef.current ?? ''
+      const files = flattenProjectTree(projectTree).filter((f) => f.endsWith('.typ') && f !== cf)
+      const options = files
+        .map((f) => ({ label: relativeImportPath(cf, f), type: 'file' as const }))
+        .filter((o) => context.explicit || o.label.toLowerCase().includes(partial.toLowerCase()))
+      return options.length > 0 || context.explicit ? { from, options, validFor: /^[^"]*$/ } : null
+    }, [projectTree])
 
-    const handleWheel = (e: WheelEvent) => {
-      if (!e.ctrlKey) return
-      e.preventDefault()
-      const delta = e.deltaY < 0 ? 1 : -1
-      const next = Math.min(MAX_FONT_SIZE, Math.max(MIN_FONT_SIZE, fontSizeRef.current + delta))
-      if (next === fontSizeRef.current) return
-      fontSizeRef.current = next
-      viewRef.current?.dispatch({
-        effects: fontCompartment.current.reconfigure(fontTheme(next)),
-      })
-    }
+    useEffect(() => {
+      if (!containerRef.current) return;
 
-    el.addEventListener('wheel', handleWheel, { passive: false })
-    return () => el.removeEventListener('wheel', handleWheel)
-  }, [])
+      const ctrlHeld = { current: false };
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Control") ctrlHeld.current = true;
+      };
+      const onKeyUp = (e: KeyboardEvent) => {
+        if (e.key !== "Control") return;
+        ctrlHeld.current = false;
+        viewRef.current?.dispatch({ effects: setCtrlLink.of(null) });
+      };
+      window.addEventListener("keydown", onKeyDown);
+      window.addEventListener("keyup", onKeyUp);
 
-  // Sync external content → editor (e.g. file opened from explorer)
-  useEffect(() => {
-    const view = viewRef.current
-    if (!view) return
-    const current = view.state.doc.toString()
-    if (current !== content) {
-      view.dispatch({
-        changes: { from: 0, to: current.length, insert: content },
-      })
-    }
-  }, [content])
+      const extensions = [
+        lineNumbers(),
+        highlightSpecialChars(),
+        lintGutter(),
+        codeFolding(),
+        foldGutter(),
+        typstFoldService,
+        scrollPastEnd(),
+        history(),
+        ctrlLinkField,
+        keymap.of([
+          indentWithTab,
+          ...defaultKeymap,
+          ...historyKeymap,
+          ...foldKeymap,
+          {
+            key: "Mod-s",
+            run: () => {
+              onSaveRef.current();
+              return true;
+            },
+          },
+          {
+            key: "Alt-z",
+            run: (view) => {
+              wrapRef.current = !wrapRef.current;
+              view.dispatch({
+                effects: wrapCompartment.current.reconfigure(
+                  wrapRef.current ? EditorView.lineWrapping : [],
+                ),
+              });
+              return true;
+            },
+          },
+        ]),
+        autocompletion({
+          override: [
+            // IDE-aware completions (explicit only — requires a full compilation)
+            async (context) => {
+              if (!context.explicit) return null
+              const tmp = tmpPathRef.current
+              const entry = entryFileRef.current
+              const cf = currentFileRef.current
+              if (!tmp || !entry || !cf) return null
+              const text = context.state.doc.sliceString(0, context.pos)
+              const cursorByte = new TextEncoder().encode(text).byteLength
+              try {
+                const result = await getCompletions(tmp, entry, cf, cursorByte, true)
+                if (!result || result.items.length === 0) return null
+                const from = byteOffsetToPos(context.state.doc, result.from)
+                return {
+                  from,
+                  options: result.items.map((item) => ({
+                    label: item.label,
+                    type: item.kind,
+                    apply: item.apply ?? undefined,
+                    detail: item.detail ?? undefined,
+                  })),
+                }
+              } catch {
+                return null
+              }
+            },
+            importCompletionSource,
+          ],
+          maxRenderedOptions: 20,
+        }),
+        hoverTooltip(async (view, pos) => {
+          const tmp = tmpPathRef.current
+          const entry = entryFileRef.current
+          const cf = currentFileRef.current
+          if (!tmp || !entry || !cf) return null
+          const text = view.state.doc.sliceString(0, pos)
+          const cursorByte = new TextEncoder().encode(text).byteLength
+          try {
+            const tip = await getTooltip(tmp, entry, cf, cursorByte)
+            if (!tip) return null
+            return {
+              pos,
+              create() {
+                const dom = document.createElement('div')
+                dom.style.cssText =
+                  'padding:4px 8px;font-size:12px;font-family:monospace;max-width:400px;white-space:pre-wrap;'
+                dom.textContent = tip
+                return { dom }
+              },
+            }
+          } catch {
+            return null
+          }
+        }),
+        oneDark,
+        syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+        typstLanguage,
+        EditorView.updateListener.of((update) => {
+          if (update.docChanged)
+            onChangeRef.current(update.state.doc.toString());
+          if (
+            (update.selectionSet || update.docChanged) &&
+            onCursorLineRef.current
+          ) {
+            const line =
+              update.state.doc.lineAt(update.state.selection.main.head)
+                .number - 1;
+            onCursorLineRef.current(line);
+          }
+        }),
+        EditorView.domEventHandlers({
+          mousemove(e, view) {
+            if (!ctrlHeld.current || !onGotoDefRef.current) {
+              const hasDeco =
+                view.state.field(ctrlLinkField) !== Decoration.none;
+              if (hasDeco) view.dispatch({ effects: setCtrlLink.of(null) });
+              return;
+            }
+            const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+            if (pos == null) {
+              view.dispatch({ effects: setCtrlLink.of(null) });
+              return;
+            }
+            const word = view.state.wordAt(pos);
+            if (!word || word.empty) {
+              view.dispatch({ effects: setCtrlLink.of(null) });
+              return;
+            }
+            view.dispatch({
+              effects: setCtrlLink.of({ from: word.from, to: word.to }),
+            });
+          },
+          mouseleave(_, view) {
+            view.dispatch({ effects: setCtrlLink.of(null) });
+          },
+          mousedown(e, view) {
+            if (!e.ctrlKey || !onGotoDefRef.current) return false;
+            view.dispatch({ effects: setCtrlLink.of(null) });
+            const pos = view.posAtCoords({ x: e.clientX, y: e.clientY });
+            if (pos == null) return false;
+            const text = view.state.doc.sliceString(0, pos);
+            onGotoDefRef.current(new TextEncoder().encode(text).byteLength);
+            return true;
+          },
+        }),
+        fontCompartment.current.of(fontTheme(fontSizeRef.current)),
+        wrapCompartment.current.of([]),
+      ];
 
-  return <div ref={containerRef} className="h-full overflow-hidden" />
-}
+      const state = EditorState.create({ doc: content, extensions });
+      const view = new EditorView({ state, parent: containerRef.current });
+      viewRef.current = view;
+
+      onMountedRef.current?.();
+
+      if (initialOffset != null && initialOffset > 0) {
+        const pos = byteOffsetToPos(view.state.doc, initialOffset);
+        view.dispatch({
+          selection: { anchor: pos },
+          effects: EditorView.scrollIntoView(pos, { y: "center" }),
+        });
+      } else if (initialScrollTop) {
+        requestAnimationFrame(() => {
+          if (viewRef.current)
+            viewRef.current.scrollDOM.scrollTop = initialScrollTop;
+        });
+      }
+
+      return () => {
+        window.removeEventListener("keydown", onKeyDown);
+        window.removeEventListener("keyup", onKeyUp);
+        onScrollTopRef.current?.(view.scrollDOM.scrollTop);
+        view.destroy();
+        viewRef.current = null;
+      };
+    }, []);
+
+    useEffect(() => {
+      const el = containerRef.current;
+      if (!el) return;
+      const handleWheel = (e: WheelEvent) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        const delta = e.deltaY < 0 ? 1 : -1;
+        const next = Math.min(
+          MAX_FONT_SIZE,
+          Math.max(MIN_FONT_SIZE, fontSizeRef.current + delta),
+        );
+        if (next === fontSizeRef.current) return;
+        fontSizeRef.current = next;
+        viewRef.current?.dispatch({
+          effects: fontCompartment.current.reconfigure(fontTheme(next)),
+        });
+      };
+      el.addEventListener("wheel", handleWheel, { passive: false });
+      return () => el.removeEventListener("wheel", handleWheel);
+    }, []);
+
+    useEffect(() => {
+      const view = viewRef.current;
+      if (!view) return;
+      const current = view.state.doc.toString();
+      if (current !== content) {
+        view.dispatch({
+          changes: { from: 0, to: current.length, insert: content },
+        });
+      }
+    }, [content]);
+
+    return <div ref={containerRef} className="h-full overflow-hidden" />;
+  },
+);
