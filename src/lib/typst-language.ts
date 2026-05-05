@@ -93,8 +93,14 @@ const typstLanguage = StreamLanguage.define<State>({
       return 'strong'
     }
 
-    // Italic _..._
-    if (stream.match('_')) {
+    // Italic _..._ — only when not preceded by a word character (e.g. foo_bar stays plain)
+    if (stream.peek() === '_') {
+      const prevChar = stream.pos > 0 ? stream.string[stream.pos - 1] : ''
+      if (/\w/.test(prevChar)) {
+        stream.next()
+        return null
+      }
+      stream.next()
       while (!stream.eol() && !stream.match('_', true)) stream.next()
       return 'emphasis'
     }
