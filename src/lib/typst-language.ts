@@ -87,8 +87,15 @@ const typstLanguage = StreamLanguage.define<State>({
       if (stream.match(/^=\s/))    { stream.skipToEnd(); return 'header' }
     }
 
-    // Bold *...*
-    if (stream.match('*')) {
+    // Bold *...* — skip if preceded by word/closing-bracket OR followed by space (multiplication)
+    if (stream.peek() === '*') {
+      const prevChar = stream.pos > 0 ? stream.string[stream.pos - 1] : ''
+      const afterStar = stream.string[stream.pos + 1] ?? ''
+      if (/[\w)\]]/.test(prevChar) || afterStar === ' ' || afterStar === '\t' || afterStar === '') {
+        stream.next()
+        return null
+      }
+      stream.next()
       while (!stream.eol() && !stream.match('*', true)) stream.next()
       return 'strong'
     }
