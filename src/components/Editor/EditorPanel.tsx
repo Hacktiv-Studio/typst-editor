@@ -15,7 +15,8 @@ import {
 } from "./CodeMirrorEditor";
 import { EditorTabs } from "./EditorTabs";
 
-const DEBOUNCE_MS = 700;
+const DEBOUNCE_NORMAL_MS = 700;
+const DEBOUNCE_ERROR_MS = 300;
 
 function resolveImportPath(fromFile: string, importPath: string): string {
   const fromDir = fromFile.split('/').slice(0, -1)
@@ -178,11 +179,12 @@ export function EditorPanel() {
     if (!activeFile) return;
     updateFileContent(activeFile, content);
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    const delay = compileErrorsRef.current.length > 0 ? DEBOUNCE_ERROR_MS : DEBOUNCE_NORMAL_MS;
     debounceRef.current = setTimeout(async () => {
       if (!tmpPath) return;
       await writeFile(tmpPath, activeFile, content).catch(() => {});
       runCompile();
-    }, DEBOUNCE_MS);
+    }, delay);
   }
 
   function handleCursorLine(line: number) {
