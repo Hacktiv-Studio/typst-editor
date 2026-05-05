@@ -46,8 +46,11 @@ export function PreviewPanel() {
       useAppStore.setState({ previewVisible: false });
       return;
     }
+    const url = tmpPath
+      ? `preview.html?tmpPath=${encodeURIComponent(tmpPath)}`
+      : "preview.html";
     const popup = new WebviewWindow("preview-popup", {
-      url: "preview.html",
+      url,
       title: "Aperçu",
       width: 800,
       height: 1000,

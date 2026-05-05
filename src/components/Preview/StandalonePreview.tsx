@@ -1,5 +1,4 @@
-import { listen } from "@tauri-apps/api/event";
-import { emitTo } from "@tauri-apps/api/event";
+import { listen, emitTo } from "@tauri-apps/api/event";
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { useEffect } from "react";
 import {
@@ -46,10 +45,16 @@ export function StandalonePreview() {
 
     refresh();
 
+    let unlistenStart: (() => void) | undefined;
+    listen<unknown>("compilation-started", () => {
+      useAppStore.setState({ isCompiling: true });
+    }).then((fn) => { unlistenStart = fn; });
+
     let unlistenCompile: (() => void) | undefined;
-    listen<unknown>("compilation-complete", refresh).then((fn) => {
-      unlistenCompile = fn;
-    });
+    listen<unknown>("compilation-complete", async () => {
+      await refresh();
+      useAppStore.setState({ isCompiling: false });
+    }).then((fn) => { unlistenCompile = fn; });
 
     let unlistenTmpPath: (() => void) | undefined;
     listen<string>("update-popup-tmppath", (e) => {
@@ -61,6 +66,7 @@ export function StandalonePreview() {
 
     return () => {
       unlistenClose.then((fn) => fn?.());
+      unlistenStart?.();
       unlistenCompile?.();
       unlistenTmpPath?.();
     };

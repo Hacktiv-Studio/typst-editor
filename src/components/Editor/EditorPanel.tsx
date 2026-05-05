@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, startTransition } from "react";
+import { emit } from "@tauri-apps/api/event";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useAppStore } from "../../store/appStore";
 import {
@@ -111,6 +112,7 @@ export function EditorPanel() {
     const gen = ++compileGenRef.current;
     setCompiling(true);
     clearOutput();
+    emit('compilation-started', {}).catch(() => {});
     const t0 = Date.now();
     appendOutput(`[${ts()}] ${t("output.compileStart", { gen })}`);
     try {
@@ -145,7 +147,9 @@ export function EditorPanel() {
         setSourceMap(result.sourceMap);
         if (result.output) appendOutput(result.output);
         if (result.pageCount > 0) {
-          writePreviewCache(tmpPath, useAppStore.getState().pages).catch(() => {});
+          writePreviewCache(tmpPath, useAppStore.getState().pages)
+            .then(() => emit('compilation-complete', {}))
+            .catch(() => {});
         }
       });
     } catch (err) {
