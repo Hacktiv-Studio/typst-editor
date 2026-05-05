@@ -17,6 +17,17 @@ import { EditorTabs } from "./EditorTabs";
 
 const DEBOUNCE_MS = 700;
 
+function resolveImportPath(fromFile: string, importPath: string): string {
+  const fromDir = fromFile.split('/').slice(0, -1)
+  const parts = importPath.replace(/^\.\//, '').split('/')
+  const resolved = [...fromDir]
+  for (const part of parts) {
+    if (part === '..') resolved.pop()
+    else if (part !== '.') resolved.push(part)
+  }
+  return resolved.join('/')
+}
+
 function ts() {
   return new Date().toLocaleTimeString("fr-FR", {
     hour: "2-digit",
@@ -191,6 +202,26 @@ export function EditorPanel() {
 
   async function handleGotoDefinition(cursorByte: number) {
     if (!tmpPath || !activeFile) return;
+
+    // Check if cursor is on a file path in #import or #include
+    const content = openFiles.find(f => f.path === activeFile)?.content ?? ''
+    const charPos = new TextDecoder().decode(new TextEncoder().encode(content).slice(0, cursorByte)).length
+    const lineStart = content.lastIndexOf('\n', charPos - 1) + 1
+    const lineEnd = content.indexOf('\n', charPos)
+    const line = content.slice(lineStart, lineEnd === -1 ? undefined : lineEnd)
+    const m = line.match(/^#(?:import|include)\s+"([^"]*)"/)
+    if (m) {
+      const importPath = m[1]
+      if (!importPath.startsWith('@')) {
+        const resolved = resolveImportPath(activeFile, importPath)
+        const fileContent = await readFile(tmpPath, resolved).catch(() => null)
+        if (fileContent !== null) {
+          openFile({ path: resolved, content: fileContent, isDirty: false })
+          return
+        }
+      }
+    }
+
     const result = await gotoDefinition(tmpPath, entryFile, activeFile, cursorByte).catch(() => null);
     if (!result) return;
     if (result.file != null && result.byteOffset != null) {
