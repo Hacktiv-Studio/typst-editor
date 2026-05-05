@@ -122,6 +122,8 @@ pub struct TypstWorld {
     fonts: Arc<Vec<Font>>,
     source_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Source)>>>,
     file_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Bytes)>>>,
+    /// In-memory content override — bypasses disk for the file being actively edited.
+    live_source: Option<(FileId, Source)>,
 }
 
 unsafe impl Send for TypstWorld {}
@@ -135,15 +137,16 @@ impl TypstWorld {
         library: Arc<LazyHash<Library>>,
         source_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Source)>>>,
         file_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Bytes)>>>,
+        live_source: Option<(FileId, Source)>,
     ) -> Self {
         let main_id = FileId::new(None, VirtualPath::new(main_file));
-        TypstWorld { root, main_id, library, book, fonts, source_cache, file_cache }
+        TypstWorld { root, main_id, library, book, fonts, source_cache, file_cache, live_source }
     }
 
     /// Convenience constructor for tests (loads its own fonts).
     pub fn new(root: PathBuf, main_file: &str) -> Self {
         let cache = FontCache::load();
-        Self::from_cache(root, main_file, cache.book, cache.fonts, cache.library, cache.source_cache, cache.file_cache)
+        Self::from_cache(root, main_file, cache.book, cache.fonts, cache.library, cache.source_cache, cache.file_cache, None)
     }
 
     /// Resolve a FileId to an absolute path on disk.
@@ -209,6 +212,12 @@ impl World for TypstWorld {
     }
 
     fn source(&self, id: FileId) -> FileResult<Source> {
+        // Live source always wins — used when content is passed directly via IPC
+        if let Some((live_id, live_src)) = &self.live_source {
+            if *live_id == id {
+                return Ok(live_src.clone());
+            }
+        }
         let path = self.resolve_path(id)?;
         let mtime = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
         if let Some(mt) = mtime {
@@ -323,16 +332,16 @@ fn diagnostics_to_errors(
 fn build_source_map(world: &TypstWorld, document: &PagedDocument) -> HashMap<String, Vec<Option<u32>>> {
     let n = document.pages.len();
 
-    // Step 1: for each (file, line), record the FIRST page it appears on.
-    // Using or_insert ensures subsequent pages don't overwrite the first occurrence.
     let mut line_first_page: HashMap<(String, usize), usize> = HashMap::new();
+    // Cache (Source, file_path) per FileId to avoid locking source_cache per glyph.
+    // A 30-page document can have 20k+ spans across 2-3 source files — without this
+    // we'd acquire the mutex once per span instead of once per unique file.
+    let mut local_srcs: HashMap<FileId, Option<(Source, String)>> = HashMap::new();
+
     for (page_idx, page) in document.pages.iter().enumerate() {
-        collect_frame(world, &page.frame, page_idx, &mut line_first_page);
+        collect_frame(world, &page.frame, page_idx, &mut line_first_page, &mut local_srcs);
     }
 
-    // Step 2: invert — for each page, the min source line whose first appearance is on it.
-    // This fixes content like #lorem(200) on line 4 spanning pages 0-2: all three pages
-    // have line 4 in them, but line 4's first_page=0, so only page 0 gets an entry.
     let mut per_file: HashMap<String, Vec<Option<usize>>> = HashMap::new();
     for ((file_path, line), first_page) in &line_first_page {
         let page_map = per_file
@@ -350,33 +359,49 @@ fn build_source_map(world: &TypstWorld, document: &PagedDocument) -> HashMap<Str
         .collect()
 }
 
-fn collect_frame(world: &TypstWorld, frame: &Frame, page_idx: usize, map: &mut HashMap<(String, usize), usize>) {
+fn collect_frame(
+    world: &TypstWorld,
+    frame: &Frame,
+    page_idx: usize,
+    map: &mut HashMap<(String, usize), usize>,
+    local_srcs: &mut HashMap<FileId, Option<(Source, String)>>,
+) {
     for (_, item) in frame.items() {
         match item {
             FrameItem::Text(text) => {
                 for glyph in &text.glyphs {
-                    record_span(world, glyph.span.0, page_idx, map);
+                    record_span(world, glyph.span.0, page_idx, map, local_srcs);
                 }
             }
             FrameItem::Group(group) => {
-                collect_frame(world, &group.frame, page_idx, map);
+                collect_frame(world, &group.frame, page_idx, map, local_srcs);
             }
-            FrameItem::Shape(_, span) => record_span(world, *span, page_idx, map),
-            FrameItem::Image(_, _, span) => record_span(world, *span, page_idx, map),
+            FrameItem::Shape(_, span) => record_span(world, *span, page_idx, map, local_srcs),
+            FrameItem::Image(_, _, span) => record_span(world, *span, page_idx, map, local_srcs),
             _ => {}
         }
     }
 }
 
-fn record_span(world: &TypstWorld, span: Span, page_idx: usize, map: &mut HashMap<(String, usize), usize>) {
+fn record_span(
+    world: &TypstWorld,
+    span: Span,
+    page_idx: usize,
+    map: &mut HashMap<(String, usize), usize>,
+    local_srcs: &mut HashMap<FileId, Option<(Source, String)>>,
+) {
     let Some(id) = span.id() else { return };
-    // Skip package files — only track local project files
     if id.package().is_some() { return }
-    let Ok(source) = world.source(id) else { return };
+    let entry = local_srcs.entry(id).or_insert_with(|| {
+        world.source(id).ok().map(|src| {
+            let path = id.vpath().as_rootless_path().to_string_lossy().to_string();
+            (src, path)
+        })
+    });
+    let Some((source, file_path)) = entry else { return };
     let Some(range) = source.range(span) else { return };
     let line = source.byte_to_line(range.start).unwrap_or(0);
-    let file_path = id.vpath().as_rootless_path().to_string_lossy().to_string();
-    map.entry((file_path, line)).or_insert(page_idx);
+    map.entry((file_path.clone(), line)).or_insert(page_idx);
 }
 
 // ---------------------------------------------------------------------------
@@ -514,12 +539,32 @@ pub async fn compile_preview(
     font_cache: tauri::State<'_, FontCache>,
     tmp_path: String,
     entry_file: String,
+    current_file: Option<String>,
+    content: Option<String>,
 ) -> Result<CompileResult, String> {
     let book = Arc::clone(&font_cache.book);
     let fonts = Arc::clone(&font_cache.fonts);
     let library = Arc::clone(&font_cache.library);
     let source_cache = Arc::clone(&font_cache.source_cache);
     let file_cache = Arc::clone(&font_cache.file_cache);
+
+    // Build live source and kick off background disk write concurrently.
+    // The compilation uses in-memory content; disk write catches up for persistence
+    // and IDE operations (goto-def, completions) that read from disk.
+    let live_source: Option<(FileId, Source)> = match (current_file, content) {
+        (Some(cf), Some(cnt)) => {
+            let disk_path = PathBuf::from(&tmp_path).join("data")
+                .join(cf.trim_start_matches('/'));
+            let cnt_disk = cnt.clone();
+            tokio::spawn(async move {
+                let _ = tokio::fs::write(disk_path, cnt_disk).await;
+            });
+            let id = FileId::new(None, VirtualPath::new(&cf));
+            let src = Source::new(id, cnt);
+            Some((id, src))
+        }
+        _ => None,
+    };
 
     // Read previous page cache (reset if project changed)
     let prev_cache: Vec<(u64, String)> = {
@@ -532,7 +577,7 @@ pub async fn compile_preview(
 
     let (result, new_cache) = tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache);
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, live_source);
         let warned = typst::compile::<PagedDocument>(&world);
         // Evict stale comemo cache entries to prevent unbounded memory growth
         comemo::evict(30);
@@ -637,7 +682,7 @@ pub async fn export_project(
         }
 
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache);
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, None);
 
         let warned = typst::compile::<PagedDocument>(&world);
 

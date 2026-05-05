@@ -41,8 +41,13 @@ export const cleanupTmp = (tmpPath: string): Promise<void> =>
 
 // ── Compilation ──────────────────────────────────────────────
 
-export const compilePreview = (tmpPath: string, entryFile: string): Promise<CompileResult> =>
-  invoke('compile_preview', { tmpPath, entryFile })
+export const compilePreview = (
+  tmpPath: string,
+  entryFile: string,
+  currentFile?: string | null,
+  content?: string | null,
+): Promise<CompileResult> =>
+  invoke('compile_preview', { tmpPath, entryFile, currentFile: currentFile ?? null, content: content ?? null })
 
 export const exportProject = (
   tmpPath: string,

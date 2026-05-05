@@ -106,7 +106,7 @@ export function EditorPanel() {
   const activeContent =
     openFiles.find((f) => f.path === activeFile)?.content ?? "";
 
-  const runCompile = useCallback(async () => {
+  const runCompile = useCallback(async (liveFile?: string | null, liveContent?: string | null) => {
     if (!tmpPath) return;
     const gen = ++compileGenRef.current;
     setCompiling(true);
@@ -114,7 +114,7 @@ export function EditorPanel() {
     const t0 = Date.now();
     appendOutput(`[${ts()}] ${t("output.compileStart", { gen })}`);
     try {
-      const result = await compilePreview(tmpPath, entryFile);
+      const result = await compilePreview(tmpPath, entryFile, liveFile, liveContent);
       const elapsed = Date.now() - t0;
 
       if (gen !== compileGenRef.current) {
@@ -181,10 +181,12 @@ export function EditorPanel() {
     updateFileContent(activeFile, content);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const delay = compileErrorsRef.current.length > 0 ? DEBOUNCE_ERROR_MS : DEBOUNCE_NORMAL_MS;
-    debounceRef.current = setTimeout(async () => {
+    const file = activeFile;
+    debounceRef.current = setTimeout(() => {
       if (!tmpPath) return;
-      await writeFile(tmpPath, activeFile, content).catch(() => {});
-      runCompile();
+      // Pass content directly — Rust bypasses disk read and writes in background.
+      // No await needed: disk write happens concurrently with compilation.
+      runCompile(file, content);
     }, delay);
   }
 

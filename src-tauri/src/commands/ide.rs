@@ -99,7 +99,7 @@ pub async fn get_completions(
 
     tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache);
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, None);
         let document = compile_for_ide(&world);
 
         let current_id = FileId::new(None, VirtualPath::new(&current_file));
@@ -142,7 +142,7 @@ pub async fn get_tooltip(
 
     tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache);
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, None);
         let document = compile_for_ide(&world);
 
         let current_id = FileId::new(None, VirtualPath::new(&current_file));
@@ -177,7 +177,7 @@ pub async fn goto_definition(
 
     tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache);
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, None);
         let document = compile_for_ide(&world);
 
         let current_id = FileId::new(None, VirtualPath::new(&current_file));
@@ -230,7 +230,7 @@ pub async fn jump_from_click_cmd(
 
     tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache);
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, None);
 
         let Some(document) = compile_for_ide(&world) else {
             return Ok(None);
