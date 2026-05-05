@@ -136,6 +136,23 @@ export function FileTree() {
   const [dragOver, setDragOver] = useState<string | null>(null)
   const draggedPathRef = useRef<string | null>(null)
   const [externalDrag, setExternalDrag] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const zoomRef = useRef(1)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1
+      const next = Math.min(2, Math.max(0.5, zoomRef.current * factor))
+      zoomRef.current = next
+      el.style.zoom = String(next)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
 
   useEffect(() => {
     if (!tmpPath) return
@@ -256,6 +273,7 @@ export function FileTree() {
 
   return (
     <div
+      ref={containerRef}
       className={`relative flex-1 overflow-auto transition-colors ${dragOver === '' ? 'bg-[#313244]/30' : ''}`}
       onContextMenu={openBackgroundMenu}
       onDragOver={(e) => { e.preventDefault(); setDragOver('') }}
