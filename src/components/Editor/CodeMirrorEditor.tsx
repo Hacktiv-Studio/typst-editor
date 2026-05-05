@@ -624,12 +624,14 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
             typstLocalCompletionSource,
             // Font name completions inside font: "..." strings
             fontCompletionSource,
-            // IDE-aware source: fires on explicit (Ctrl+Space) OR when in a # context
+            // IDE-aware source: fires on explicit, # context, or plain identifier (user-defined symbols)
             async (context) => {
               const line = context.state.doc.lineAt(context.pos)
               const textBefore = line.text.slice(0, context.pos - line.from)
               const inHashContext = /#[a-zA-Z_][a-zA-Z0-9_-]*$/.test(textBefore) || /#$/.test(textBefore)
-              if (!context.explicit && !inHashContext) return null
+              const word = context.matchBefore(/[a-zA-Z_][a-zA-Z0-9_-]*/)
+              const typingIdent = word !== null && word.text.length >= 2
+              if (!context.explicit && !inHashContext && !typingIdent) return null
               const tmp = tmpPathRef.current
               const entry = entryFileRef.current
               const cf = currentFileRef.current
