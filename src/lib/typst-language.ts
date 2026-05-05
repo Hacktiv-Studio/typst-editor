@@ -38,10 +38,10 @@ const typstLanguage = StreamLanguage.define<State>({
       return 'monospace'
     }
 
-    // Math block $$ ... $$
+    // Math block $$ ... $$  (atom = math, distinct from string)
     if (stream.match('$$')) {
       state.inMathBlock = !state.inMathBlock
-      return 'string'
+      return 'atom'
     }
     if (state.inMathBlock) {
       if (stream.match('$$')) {
@@ -49,7 +49,7 @@ const typstLanguage = StreamLanguage.define<State>({
       } else {
         stream.next()
       }
-      return 'string'
+      return 'atom'
     }
 
     // Line comment //
@@ -74,16 +74,17 @@ const typstLanguage = StreamLanguage.define<State>({
       return 'monospace'
     }
 
-    // Inline math $ ... $
+    // Inline math $ ... $  (atom)
     if (stream.match('$')) {
       while (!stream.eol() && !stream.match('$', true)) stream.next()
-      return 'string'
+      return 'atom'
     }
 
-    // Headings = / == / ===
-    if (stream.sol() && stream.match(/^=+\s/)) {
-      stream.skipToEnd()
-      return 'heading'
+    // Headings: differentiate h1 (= ) h2 (== ) h3+ (===+)
+    if (stream.sol()) {
+      if (stream.match(/^===+\s/)) { stream.skipToEnd(); return 'qualifier' }
+      if (stream.match(/^==\s/))   { stream.skipToEnd(); return 'def' }
+      if (stream.match(/^=\s/))    { stream.skipToEnd(); return 'header' }
     }
 
     // Bold *...*
@@ -110,6 +111,11 @@ const typstLanguage = StreamLanguage.define<State>({
         if (stream.next() === '"') break
       }
       return 'string'
+    }
+
+    // Numbers
+    if (stream.match(/^-?\d+(\.\d+)?(pt|em|cm|mm|px|%|fr)?/)) {
+      return 'number'
     }
 
     stream.next()

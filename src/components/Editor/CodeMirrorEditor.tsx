@@ -3,7 +3,8 @@ import { Compartment, EditorState, StateEffect, StateField } from "@codemirror/s
 import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, hoverTooltip, keymap, lineNumbers, rectangularSelection, scrollPastEnd } from "@codemirror/view";
 import type { DecorationSet } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { bracketMatching, syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, foldKeymap, foldService } from "@codemirror/language";
+import { bracketMatching, HighlightStyle, syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, foldKeymap, foldService } from "@codemirror/language";
+import { tags } from "@lezer/highlight";
 import { setDiagnostics, lintGutter } from "@codemirror/lint";
 import type { Diagnostic } from "@codemirror/lint";
 import { autocompletion, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
@@ -152,6 +153,49 @@ function byteOffsetToPos(
 const DEFAULT_FONT_SIZE = 14;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 32;
+
+// Catppuccin Mocha syntax highlight style
+const typstHighlightStyle = HighlightStyle.define([
+  // Comments — muted, italic
+  { tag: tags.comment,           color: "#6c7086", fontStyle: "italic" },
+
+  // Strings — green
+  { tag: tags.string,            color: "#a6e3a1" },
+
+  // Math (atom) — pink
+  { tag: tags.atom,              color: "#f5c2e7" },
+
+  // Numbers + units — peach
+  { tag: tags.number,            color: "#fab387" },
+
+  // Hash commands (#set, #let, #if…) — mauve
+  { tag: tags.keyword,           color: "#cba6f7", fontWeight: "500" },
+
+  // Raw / inline code — teal
+  { tag: tags.monospace,         color: "#94e2d5" },
+
+  // Bold — yellow, bold
+  { tag: tags.strong,            color: "#f9e2af", fontWeight: "bold" },
+
+  // Italic — lavender, italic
+  { tag: tags.emphasis,          color: "#b4befe", fontStyle: "italic" },
+
+  // H1 (header) — blue, bold, large
+  { tag: tags.heading,           color: "#89b4fa", fontWeight: "bold", fontSize: "1.15em" },
+
+  // H2 (def) — sapphire, bold
+  { tag: tags.definition(tags.variableName), color: "#74c7ec", fontWeight: "bold", fontSize: "1.07em" },
+
+  // H3+ (qualifier) — sky
+  { tag: tags.modifier,          color: "#89dceb", fontWeight: "600" },
+
+  // Operators, punctuation — subtext
+  { tag: tags.operator,          color: "#a6adc8" },
+  { tag: tags.punctuation,       color: "#9399b2" },
+
+  // Fallback text
+  { tag: tags.content,           color: "#cdd6f4" },
+])
 
 // Badge helper — colored square with a letter, VSCode-style
 function badge(letter: string, bg: string, fg = "#fff"): Record<string, string> {
@@ -484,6 +528,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
           }
         }),
         oneDark,
+        syntaxHighlighting(typstHighlightStyle),
         completionTheme,
         syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
         typstLanguage,
