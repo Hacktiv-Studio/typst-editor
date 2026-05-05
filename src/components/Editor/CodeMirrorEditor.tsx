@@ -10,6 +10,7 @@ import { autocompletion } from "@codemirror/autocomplete";
 import type { CompletionContext } from "@codemirror/autocomplete";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { typstLanguage } from "../../lib/typst-language";
+import { indentationMarkers } from "@replit/codemirror-indentation-markers";
 import type { CompileError } from "../../types";
 import { useAppStore } from "../../store/appStore";
 import { getCompletions, getTooltip, listCachedPackages, listUniversePackages } from "../../tauri/commands";
@@ -293,6 +294,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
       const extensions = [
         lineNumbers(),
         highlightSpecialChars(),
+        indentationMarkers(),
         lintGutter(),
         codeFolding(),
         foldGutter(),
