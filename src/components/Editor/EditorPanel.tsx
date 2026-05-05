@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, startTransition } from "react";
 import { useTranslation } from "../../i18n/useTranslation";
 import { useAppStore } from "../../store/appStore";
 import {
@@ -116,37 +116,38 @@ export function EditorPanel() {
     try {
       const result = await compilePreview(tmpPath, entryFile);
       const elapsed = Date.now() - t0;
-      appendOutput(
-        `[${ts()}] ${t("output.compileReceived", { ms: elapsed })}`,
-      );
+
       if (gen !== compileGenRef.current) {
         appendOutput(
           `[${ts()}] ${t("output.compileIgnored", { gen, latest: compileGenRef.current })}`,
         );
         return;
       }
-      appendOutput(
-        `[${ts()}] ${t("output.compileSuccess", {
+
+      // Apply errors immediately — inline squiggles must not wait for page rendering
+      const cf = activeFileRef.current;
+      const fileErrors = cf
+        ? result.errors.filter((e) => !e.file || e.file === cf || e.file === "<unknown>")
+        : [];
+      setCompileErrors(result.errors);
+      editorRef.current?.applyErrors(fileErrors);
+
+      // Defer everything that updates the preview — keeps the editor responsive while
+      // React re-renders the page viewer and updates blob URLs in the background
+      startTransition(() => {
+        appendOutput(`[${ts()}] ${t("output.compileReceived", { ms: elapsed })}`);
+        appendOutput(`[${ts()}] ${t("output.compileSuccess", {
           pages: result.pageCount,
           updates: result.pageUpdates.length,
           errors: result.errors.length,
-        })}`,
-      );
-      applyPagesDelta(result.pageCount, result.pageUpdates);
-      setSourceMap(result.sourceMap);
-      setCompileErrors(result.errors);
-
-      const cf = activeFileRef.current;
-      if (cf) {
-        const fileErrors = result.errors.filter(
-          (e) => !e.file || e.file === cf || e.file === "<unknown>",
-        );
-        editorRef.current?.applyErrors(fileErrors);
-      }
-      if (result.output) appendOutput(result.output);
-      if (result.pageCount > 0) {
-        writePreviewCache(tmpPath, useAppStore.getState().pages).catch(() => {});
-      }
+        })}`);
+        applyPagesDelta(result.pageCount, result.pageUpdates);
+        setSourceMap(result.sourceMap);
+        if (result.output) appendOutput(result.output);
+        if (result.pageCount > 0) {
+          writePreviewCache(tmpPath, useAppStore.getState().pages).catch(() => {});
+        }
+      });
     } catch (err) {
       if (gen !== compileGenRef.current) {
         appendOutput(
