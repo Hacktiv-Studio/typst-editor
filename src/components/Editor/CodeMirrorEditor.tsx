@@ -168,8 +168,11 @@ const typstHighlightStyle = HighlightStyle.define([
   // Numbers + units — peach
   { tag: tags.number,            color: "#fab387" },
 
-  // Hash commands (#set, #let, #if…) — mauve
+  // Hash keywords (#set, #let, #if…) — mauve
   { tag: tags.keyword,           color: "#cba6f7", fontWeight: "500" },
+
+  // Function calls (#text(, #image(…) — sky/cyan
+  { tag: tags.standard(tags.name), color: "#89dceb" },
 
   // Raw / inline code — teal
   { tag: tags.monospace,         color: "#94e2d5" },

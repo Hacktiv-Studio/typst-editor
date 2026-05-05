@@ -105,9 +105,18 @@ const typstLanguage = StreamLanguage.define<State>({
       return 'emphasis'
     }
 
-    // Hash commands: #keyword or #funcname(
+    // Hash commands: distinguish keywords from function calls
     if (stream.match('#')) {
-      stream.match(/^[a-zA-Z_][a-zA-Z0-9_-]*/)
+      const m = stream.match(/^[a-zA-Z_][a-zA-Z0-9_-]*/)
+      const name = m ? (m as RegExpMatchArray)[0] : ''
+      const KEYWORDS = new Set([
+        'set', 'let', 'if', 'else', 'for', 'while', 'return',
+        'import', 'include', 'show', 'context', 'and', 'or', 'not', 'in',
+        'none', 'auto', 'true', 'false', 'break', 'continue',
+      ])
+      if (KEYWORDS.has(name)) return 'keyword'
+      // Function call: #name( or #name[
+      if (stream.peek() === '(' || stream.peek() === '[') return 'builtin'
       return 'keyword'
     }
 
