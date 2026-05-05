@@ -1,82 +1,209 @@
-import { useRef, useCallback, useEffect } from 'react'
-import { EditorTabs } from './EditorTabs'
-import { CodeMirrorEditor } from './CodeMirrorEditor'
-import { useAppStore } from '../../store/appStore'
-import { writeFile, compilePreview, readPreviewCache, writePreviewCache } from '../../tauri/commands'
+import { useCallback, useEffect, useRef } from "react";
+import { useTranslation } from "../../i18n/useTranslation";
+import { useAppStore } from "../../store/appStore";
+import {
+  compilePreview,
+  gotoDefinition,
+  readFile,
+  readPreviewCache,
+  writeFile,
+  writePreviewCache,
+} from "../../tauri/commands";
+import {
+  CodeMirrorEditor,
+  type CodeMirrorEditorHandle,
+} from "./CodeMirrorEditor";
+import { EditorTabs } from "./EditorTabs";
 
-const DEBOUNCE_MS = 300
+const DEBOUNCE_MS = 500;
+
+function ts() {
+  return new Date().toLocaleTimeString("fr-FR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
 
 export function EditorPanel() {
   const {
-    activeFile, openFiles, tmpPath, entryFile,
-    updateFileContent, markFileSaved,
-    setPages, setSourceMap, setCompiling, setCompileErrors, appendOutput, clearOutput,
-    sourceMap, activePage, setActivePage,
-  } = useAppStore()
-  const sourceMapRef = useRef<(number | null)[]>(sourceMap)
-  const activePageRef = useRef(activePage)
-  useEffect(() => { sourceMapRef.current = sourceMap }, [sourceMap])
-  useEffect(() => { activePageRef.current = activePage }, [activePage])
+    activeFile,
+    openFiles,
+    tmpPath,
+    entryFile,
+    updateFileContent,
+    markFileSaved,
+    openFile,
+    setPages,
+    applyPagesDelta,
+    setSourceMap,
+    setCompiling,
+    setCompileErrors,
+    appendOutput,
+    clearOutput,
+    compileErrors,
+    sourceMap,
+    activePage,
+    setActivePage,
+    pendingJump,
+    setPendingJump,
+  } = useAppStore();
+  const sourceMapRef = useRef<Record<string, (number | null)[]>>(sourceMap);
+  const activePageRef = useRef(activePage);
+  const activeFileRef = useRef(activeFile);
+  const compileErrorsRef = useRef(compileErrors);
+  useEffect(() => {
+    sourceMapRef.current = sourceMap;
+  }, [sourceMap]);
+  useEffect(() => {
+    activePageRef.current = activePage;
+  }, [activePage]);
+  useEffect(() => {
+    activeFileRef.current = activeFile;
+  }, [activeFile]);
+  useEffect(() => {
+    compileErrorsRef.current = compileErrors;
+  }, [compileErrors]);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const activeContent = openFiles.find((f) => f.path === activeFile)?.content ?? ''
+  const { t } = useTranslation();
+  const editorRef = useRef<CodeMirrorEditorHandle>(null);
+  const pendingJumpRef = useRef<number | undefined>(undefined);
+  const scrollPositionsRef = useRef<Record<string, number>>({});
+
+  const jumpedAtRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!pendingJump) return;
+    if (pendingJump.file !== activeFile) {
+      readFile(tmpPath!, pendingJump.file)
+        .then((content) => {
+          pendingJumpRef.current = pendingJump.byteOffset;
+          openFile({ path: pendingJump.file, content, isDirty: false });
+        })
+        .catch(() => {})
+        .finally(() => setPendingJump(null));
+      return;
+    }
+    jumpedAtRef.current = Date.now();
+    editorRef.current?.jumpTo(pendingJump.byteOffset);
+    setPendingJump(null);
+  }, [pendingJump, activeFile]);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const compileGenRef = useRef(0);
+  const activeContent =
+    openFiles.find((f) => f.path === activeFile)?.content ?? "";
 
   const runCompile = useCallback(async () => {
-    if (!tmpPath) return
-    setCompiling(true)
-    clearOutput()
+    if (!tmpPath) return;
+    const gen = ++compileGenRef.current;
+    setCompiling(true);
+    clearOutput();
+    const t0 = Date.now();
+    appendOutput(`[${ts()}] ${t("output.compileStart", { gen })}`);
     try {
-      const result = await compilePreview(tmpPath, entryFile)
-      setPages(result.pages)
-      setSourceMap(result.sourceMap)
-      setCompileErrors(result.errors)
-      appendOutput(result.output)
-      if (result.pages.length > 0) writePreviewCache(tmpPath, result.pages)
-    } catch (err) {
-      appendOutput(String(err))
-    } finally {
-      setCompiling(false)
-    }
-  }, [tmpPath, entryFile])
+      const result = await compilePreview(tmpPath, entryFile);
+      const elapsed = Date.now() - t0;
+      appendOutput(
+        `[${ts()}] ${t("output.compileReceived", { ms: elapsed })}`,
+      );
+      if (gen !== compileGenRef.current) {
+        appendOutput(
+          `[${ts()}] ${t("output.compileIgnored", { gen, latest: compileGenRef.current })}`,
+        );
+        return;
+      }
+      appendOutput(
+        `[${ts()}] ${t("output.compileSuccess", {
+          pages: result.pageCount,
+          updates: result.pageUpdates.length,
+          errors: result.errors.length,
+        })}`,
+      );
+      applyPagesDelta(result.pageCount, result.pageUpdates);
+      setSourceMap(result.sourceMap);
+      setCompileErrors(result.errors);
 
-  // On project open / session restore: show cache instantly, then compile in background
+      const cf = activeFileRef.current;
+      if (cf) {
+        const fileErrors = result.errors.filter(
+          (e) => !e.file || e.file === cf || e.file === "<unknown>",
+        );
+        editorRef.current?.applyErrors(fileErrors);
+      }
+      if (result.output) appendOutput(result.output);
+      if (result.pageCount > 0) {
+        writePreviewCache(tmpPath, useAppStore.getState().pages).catch(() => {});
+      }
+    } catch (err) {
+      if (gen !== compileGenRef.current) {
+        appendOutput(
+          `[${ts()}] ${t("output.compileCancelledGen", { gen })}`,
+        );
+        return;
+      }
+      if (String(err).includes("cancelled")) {
+        appendOutput(`[${ts()}] ${t("output.compileCancelled")}`);
+        return;
+      }
+      appendOutput(
+        `[${ts()}] ${t("output.compileError", { error: String(err) })}`,
+      );
+    } finally {
+      if (gen === compileGenRef.current) setCompiling(false);
+    }
+  }, [tmpPath, entryFile]);
+
   useEffect(() => {
-    if (!tmpPath) return
-    // Show cached pages instantly, then compile in background
+    scrollPositionsRef.current = {};
+    if (!tmpPath) return;
     readPreviewCache(tmpPath).then((cached) => {
-      if (cached && cached.length > 0) setPages(cached)
-    })
-    runCompile()
-  }, [tmpPath, runCompile])
+      if (cached && cached.length > 0) setPages(cached);
+    });
+    runCompile();
+  }, [tmpPath]);
 
   function handleChange(content: string) {
-    if (!activeFile) return
-    updateFileContent(activeFile, content)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
+    if (!activeFile) return;
+    updateFileContent(activeFile, content);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(async () => {
-      if (!tmpPath) return
-      await writeFile(tmpPath, activeFile, content).catch(() => {})
-      runCompile()
-    }, DEBOUNCE_MS)
+      if (!tmpPath) return;
+      await writeFile(tmpPath, activeFile, content).catch(() => {});
+      runCompile();
+    }, DEBOUNCE_MS);
   }
 
   function handleCursorLine(line: number) {
-    const map = sourceMapRef.current
-    if (!map || map.length === 0) return
-    let page = 0
-    for (let i = 0; i < map.length; i++) {
-      const v = map[i]
-      if (v !== null && v !== undefined && v <= line) page = i
+    if (Date.now() - jumpedAtRef.current < 1500) return;
+    const fileMap = activeFile
+      ? sourceMapRef.current[activeFile] ??
+        sourceMapRef.current[entryFile]
+      : undefined;
+    if (!fileMap || fileMap.length === 0) return;
+    let page = 0;
+    for (let i = 0; i < fileMap.length; i++) {
+      const v = fileMap[i];
+      if (v !== null && v !== undefined && v <= line) page = i;
     }
-    if (page !== activePageRef.current) setActivePage(page)
+    if (page !== activePageRef.current) setActivePage(page);
+  }
+
+  async function handleGotoDefinition(cursorByte: number) {
+    if (!tmpPath || !activeFile) return;
+    const result = await gotoDefinition(tmpPath, entryFile, activeFile, cursorByte).catch(() => null);
+    if (!result) return;
+    if (result.file != null && result.byteOffset != null) {
+      setPendingJump({ file: result.file, byteOffset: result.byteOffset });
+    }
   }
 
   async function handleSave() {
-    if (!tmpPath || !activeFile) return
-    const file = openFiles.find((f) => f.path === activeFile)
-    if (!file) return
-    await writeFile(tmpPath, activeFile, file.content)
-    markFileSaved(activeFile)
+    if (!tmpPath || !activeFile) return;
+    const file = openFiles.find((f) => f.path === activeFile);
+    if (!file) return;
+    await writeFile(tmpPath, activeFile, file.content);
+    markFileSaved(activeFile);
   }
 
   if (!activeFile) {
@@ -84,10 +211,10 @@ export function EditorPanel() {
       <div className="h-full bg-[#1e1e2e] flex flex-col">
         <EditorTabs />
         <div className="flex-1 flex items-center justify-center text-[#585b70] text-sm">
-          Ouvrir un fichier depuis l'explorateur
+          {t("editor.openFileHint")}
         </div>
       </div>
-    )
+    );
   }
 
   return (
@@ -96,12 +223,32 @@ export function EditorPanel() {
       <div className="flex-1 overflow-hidden">
         <CodeMirrorEditor
           key={activeFile}
+          ref={editorRef}
           content={activeContent}
           onChange={handleChange}
           onCursorLine={handleCursorLine}
           onSave={handleSave}
+          onGotoDefinition={handleGotoDefinition}
+          initialOffset={pendingJumpRef.current}
+          initialScrollTop={scrollPositionsRef.current[activeFile]}
+          onScrollTop={(y) => {
+            scrollPositionsRef.current[activeFile!] = y;
+          }}
+          onMounted={() => {
+            pendingJumpRef.current = undefined;
+            if (activeFile) {
+              const errs = compileErrorsRef.current.filter(
+                (e) =>
+                  !e.file || e.file === activeFile || e.file === "<unknown>",
+              );
+              editorRef.current?.applyErrors(errs);
+            }
+          }}
+          tmpPath={tmpPath}
+          entryFile={entryFile}
+          currentFile={activeFile}
         />
       </div>
     </div>
-  )
+  );
 }

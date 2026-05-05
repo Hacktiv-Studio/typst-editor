@@ -9,11 +9,17 @@ export interface ProjectInfo {
   tree: ProjectEntry[]
 }
 
+export interface PageUpdate {
+  index: number
+  svg: string
+}
+
 export interface CompileResult {
-  pages: string[]          // SVG strings
+  pageCount: number
+  pageUpdates: PageUpdate[]
   errors: CompileError[]
   output: string
-  sourceMap: (number | null)[]  // index = page, value = min source line, null if page has no entry-file content
+  sourceMap: Record<string, (number | null)[]>
 }
 
 // ── Commandes projet ─────────────────────────────────────────
@@ -96,3 +102,95 @@ export const readPreviewCache = (tmpPath: string): Promise<string[] | null> =>
 
 export const writePreviewCache = (tmpPath: string, pages: string[]): Promise<void> =>
   invoke('write_preview_cache', { tmpPath, pages }).catch(() => {}) as Promise<void>
+
+// ── Package listing ──────────────────────────────────────────
+
+export interface CachedPackage {
+  namespace: string
+  name: string
+  version: string
+}
+
+export const listCachedPackages = (): Promise<CachedPackage[]> =>
+  invoke('list_cached_packages')
+
+export const listUniversePackages = (): Promise<CachedPackage[]> =>
+  invoke('list_universe_packages')
+
+// ── IDE / Language intelligence ──────────────────────────────
+
+export interface CompletionItem {
+  kind: string
+  label: string
+  apply: string | null
+  detail: string | null
+}
+
+export interface CompletionsResult {
+  from: number
+  items: CompletionItem[]
+}
+
+export interface JumpResult {
+  file?: string
+  byteOffset?: number
+  url?: string
+  page?: number
+}
+
+export const getCompletions = (
+  tmpPath: string,
+  entryFile: string,
+  currentFile: string,
+  cursorByte: number,
+  explicit: boolean
+): Promise<CompletionsResult | null> =>
+  invoke('get_completions', { tmpPath, entryFile, currentFile, cursorByte, explicit })
+
+export const getTooltip = (
+  tmpPath: string,
+  entryFile: string,
+  currentFile: string,
+  cursorByte: number
+): Promise<string | null> =>
+  invoke('get_tooltip', { tmpPath, entryFile, currentFile, cursorByte })
+
+export const gotoDefinition = (
+  tmpPath: string,
+  entryFile: string,
+  currentFile: string,
+  cursorByte: number
+): Promise<JumpResult | null> =>
+  invoke('goto_definition', { tmpPath, entryFile, currentFile, cursorByte })
+
+export const jumpFromClick = (
+  tmpPath: string,
+  entryFile: string,
+  page: number,
+  clickXRatio: number,
+  clickYRatio: number
+): Promise<JumpResult | null> =>
+  invoke('jump_from_click_cmd', { tmpPath, entryFile, page, clickXRatio, clickYRatio })
+
+export const invalidateCompileHashes = (tmpPath: string): Promise<void> =>
+  invoke('invalidate_compile_hashes', { tmpPath })
+
+// ── Versioning ───────────────────────────────────────────────
+
+export interface VersionInfo {
+  id: string
+  label: string
+  size: number
+}
+
+export const createVersion = (tmpPath: string): Promise<VersionInfo> =>
+  invoke('create_version', { tmpPath })
+
+export const listVersions = (tmpPath: string): Promise<VersionInfo[]> =>
+  invoke('list_versions', { tmpPath })
+
+export const restoreVersion = (tmpPath: string, versionId: string): Promise<void> =>
+  invoke('restore_version', { tmpPath, versionId })
+
+export const cleanupStaleProjects = (currentTmp: string | null): Promise<void> =>
+  invoke('cleanup_stale_projects', { currentTmp })
