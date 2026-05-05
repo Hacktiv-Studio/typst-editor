@@ -1,13 +1,14 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useCallback } from "react";
 import { Compartment, EditorState, StateEffect, StateField } from "@codemirror/state";
-import { Decoration, EditorView, highlightSpecialChars, hoverTooltip, keymap, lineNumbers, scrollPastEnd } from "@codemirror/view";
+import { Decoration, EditorView, drawSelection, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, hoverTooltip, keymap, lineNumbers, rectangularSelection, scrollPastEnd } from "@codemirror/view";
 import type { DecorationSet } from "@codemirror/view";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
-import { syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, foldKeymap, foldService } from "@codemirror/language";
+import { bracketMatching, syntaxHighlighting, defaultHighlightStyle, codeFolding, foldGutter, foldKeymap, foldService } from "@codemirror/language";
 import { setDiagnostics, lintGutter } from "@codemirror/lint";
 import type { Diagnostic } from "@codemirror/lint";
-import { autocompletion } from "@codemirror/autocomplete";
+import { autocompletion, closeBrackets, closeBracketsKeymap } from "@codemirror/autocomplete";
 import type { CompletionContext } from "@codemirror/autocomplete";
+import { highlightSelectionMatches, search, searchKeymap } from "@codemirror/search";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { typstLanguage } from "../../lib/typst-language";
 import { indentationMarkers } from "@replit/codemirror-indentation-markers";
@@ -293,8 +294,16 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
 
       const extensions = [
         lineNumbers(),
+        highlightActiveLine(),
+        highlightActiveLineGutter(),
         highlightSpecialChars(),
+        highlightSelectionMatches(),
         indentationMarkers(),
+        bracketMatching(),
+        closeBrackets(),
+        drawSelection(),
+        rectangularSelection(),
+        search({ top: true }),
         lintGutter(),
         codeFolding(),
         foldGutter(),
@@ -304,6 +313,8 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
         ctrlLinkField,
         keymap.of([
           indentWithTab,
+          ...closeBracketsKeymap,
+          ...searchKeymap,
           ...defaultKeymap,
           ...historyKeymap,
           ...foldKeymap,
