@@ -153,25 +153,46 @@ const DEFAULT_FONT_SIZE = 14;
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 32;
 
+// Badge helper — colored square with a letter, VSCode-style
+function badge(letter: string, bg: string, fg = "#fff"): Record<string, string> {
+  return {
+    content: `'${letter}'`,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "15px",
+    height: "15px",
+    borderRadius: "3px",
+    background: bg,
+    color: fg,
+    fontSize: "9px",
+    fontWeight: "700",
+    fontFamily: "sans-serif",
+    lineHeight: "1",
+  }
+}
+
 const completionTheme = EditorView.theme({
   ".cm-tooltip": {
     border: "1px solid #45475a",
     borderRadius: "8px",
-    boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
+    boxShadow: "0 12px 32px rgba(0,0,0,0.6)",
     overflow: "hidden",
   },
   ".cm-tooltip.cm-tooltip-autocomplete": {
     background: "#1e1e2e",
     padding: "4px",
+    minWidth: "260px",
   },
   ".cm-tooltip-autocomplete > ul": {
     fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     fontSize: "12px",
-    maxHeight: "220px",
+    maxHeight: "240px",
   },
   ".cm-tooltip-autocomplete > ul > li": {
     display: "flex",
     alignItems: "center",
+    gap: "8px",
     padding: "3px 8px",
     borderRadius: "5px",
     color: "#cdd6f4",
@@ -184,26 +205,41 @@ const completionTheme = EditorView.theme({
   ".cm-completionMatchedText": {
     textDecoration: "none",
     color: "#89b4fa",
-    fontWeight: "600",
+    fontWeight: "700",
   },
   ".cm-completionDetail": {
     marginLeft: "auto",
-    paddingLeft: "12px",
-    fontSize: "11px",
-    color: "#585b70",
+    paddingLeft: "8px",
+    fontSize: "10px",
+    color: "#45475a",
     fontStyle: "normal",
+    flexShrink: "0",
   },
+  // Icon container — fixed width, no default ::after content
   ".cm-completionIcon": {
-    paddingRight: "6px",
-    fontSize: "11px",
-    opacity: "0.7",
-    width: "16px",
+    flexShrink: "0",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: "18px",
+    padding: "0",
   },
-  ".cm-completionIcon-function::after":  { content: "'ƒ'", color: "#cba6f7" },
-  ".cm-completionIcon-variable::after":  { content: "'𝑥'", color: "#89dceb" },
-  ".cm-completionIcon-keyword::after":   { content: "'k'", color: "#89b4fa" },
-  ".cm-completionIcon-type::after":      { content: "'T'", color: "#a6e3a1" },
-  ".cm-completionIcon-file::after":      { content: "'📄'", fontSize: "10px" },
+  ".cm-completionIcon::after": { content: "''" },
+
+  // Per-type badges — Catppuccin Mocha palette
+  ".cm-completionIcon-function::after":  badge("f", "#8839ef"),       // mauve
+  ".cm-completionIcon-method::after":    badge("m", "#fe640b"),       // peach
+  ".cm-completionIcon-variable::after":  badge("v", "#04a5e5"),       // sky
+  ".cm-completionIcon-constant::after":  badge("c", "#df8e1d"),       // yellow
+  ".cm-completionIcon-keyword::after":   badge("k", "#1e66f5"),       // blue
+  ".cm-completionIcon-type::after":      badge("T", "#179299"),       // teal
+  ".cm-completionIcon-class::after":     badge("C", "#40a02b"),       // green
+  ".cm-completionIcon-interface::after": badge("I", "#209fb5"),       // sapphire
+  ".cm-completionIcon-enum::after":      badge("E", "#ea76cb"),       // pink
+  ".cm-completionIcon-property::after":  badge("p", "#d20f39"),       // red
+  ".cm-completionIcon-namespace::after": badge("N", "#e64553"),       // maroon
+  ".cm-completionIcon-text::after":      badge("t", "#6c6f85", "#cdd6f4"),  // overlay0
+  ".cm-completionIcon-file::after":      badge("~", "#585b70", "#cdd6f4"),  // muted
 }, { dark: true })
 
 function fontTheme(size: number) {
