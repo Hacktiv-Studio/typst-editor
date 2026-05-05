@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use rayon::prelude::*;
 use std::time::SystemTime;
 use typst::syntax::package::PackageSpec;
+use comemo;
 
 use chrono::Datelike;
 use serde::{Deserialize, Serialize};
@@ -47,12 +48,6 @@ pub struct CompileResult {
     pub source_map: HashMap<String, Vec<Option<u32>>>,
 }
 
-fn hash_str(s: &str) -> u64 {
-    let mut h = DefaultHasher::new();
-    s.hash(&mut h);
-    h.finish()
-}
-
 // ---------------------------------------------------------------------------
 // FontCache — load system fonts once at startup, share across compilations
 // ---------------------------------------------------------------------------
@@ -66,8 +61,9 @@ pub struct FontCache {
     pub source_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Source)>>>,
     /// Binary file cache: absolute path → (mtime, raw bytes).
     pub file_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Bytes)>>>,
-    /// SVG page hashes from last successful compilation, per project (tmp_path).
-    pub page_hashes: Mutex<(String, Vec<u64>)>,
+    /// SVG page cache from last successful compilation, per project (tmp_path).
+    /// Stores (frame_hash, svg_string) per page so unchanged pages skip serialization.
+    pub page_cache: Mutex<(String, Vec<(u64, String)>)>,
 }
 
 // FontBook and Font are not Send/Sync by default because of raw pointers in
@@ -109,7 +105,7 @@ impl FontCache {
             library: Arc::new(LazyHash::new(Library::default())),
             source_cache: Arc::new(Mutex::new(HashMap::new())),
             file_cache: Arc::new(Mutex::new(HashMap::new())),
-            page_hashes: Mutex::new((String::new(), Vec::new())),
+            page_cache: Mutex::new((String::new(), Vec::new())),
         }
     }
 }
@@ -525,46 +521,61 @@ pub async fn compile_preview(
     let source_cache = Arc::clone(&font_cache.source_cache);
     let file_cache = Arc::clone(&font_cache.file_cache);
 
-    // Read previous page hashes (reset if project changed)
-    let prev_hashes: Vec<u64> = {
-        let mut ph = font_cache.page_hashes.lock().unwrap();
-        if ph.0 != tmp_path {
-            *ph = (tmp_path.clone(), Vec::new());
+    // Read previous page cache (reset if project changed)
+    let prev_cache: Vec<(u64, String)> = {
+        let mut pc = font_cache.page_cache.lock().unwrap();
+        if pc.0 != tmp_path {
+            *pc = (tmp_path.clone(), Vec::new());
         }
-        ph.1.clone()
+        pc.1.clone()
     };
 
-    let (result, new_hashes) = tokio::task::spawn_blocking(move || {
+    let (result, new_cache) = tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
         let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache);
         let warned = typst::compile::<PagedDocument>(&world);
+        // Evict stale comemo cache entries to prevent unbounded memory growth
+        comemo::evict(30);
 
         match warned.output {
             Ok(document) => {
                 let page_count = document.pages.len();
-                // When page count changes, treat all pages as new (avoids stale index comparisons)
-                let effective_prev: &[u64] = if prev_hashes.len() == page_count {
-                    &prev_hashes
-                } else {
-                    &[]
-                };
+                let use_prev = prev_cache.len() == page_count;
 
-                // Serialize all pages in parallel, then collect in order
-                let serialized: Vec<(String, u64)> = document.pages
+                // Hash all frames cheaply (no string allocation) to detect changes
+                let frame_hashes: Vec<u64> = document.pages.iter().map(|page| {
+                    let mut h = DefaultHasher::new();
+                    page.frame.hash(&mut h);
+                    h.finish()
+                }).collect();
+
+                // Serialize only changed pages in parallel
+                let new_svgs: Vec<Option<String>> = document.pages
                     .par_iter()
-                    .map(|page| {
-                        let svg = typst_svg::svg(page);
-                        let h = hash_str(&svg);
-                        (svg, h)
+                    .zip(frame_hashes.par_iter())
+                    .enumerate()
+                    .map(|(i, (page, &fh))| {
+                        if use_prev && prev_cache.get(i).map(|(ph, _)| *ph) == Some(fh) {
+                            None // frame unchanged — skip serialization
+                        } else {
+                            Some(typst_svg::svg(page))
+                        }
                     })
                     .collect();
 
-                let mut new_hashes = Vec::with_capacity(page_count);
-                let mut page_updates = Vec::new();
-                for (i, (svg, h)) in serialized.into_iter().enumerate() {
-                    new_hashes.push(h);
-                    if effective_prev.get(i).copied() != Some(h) {
-                        page_updates.push(PageUpdate { index: i, svg });
+                let mut new_cache: Vec<(u64, String)> = Vec::with_capacity(page_count);
+                let mut page_updates: Vec<PageUpdate> = Vec::new();
+
+                for (i, (&fh, svg_opt)) in frame_hashes.iter().zip(new_svgs.into_iter()).enumerate() {
+                    match svg_opt {
+                        Some(svg) => {
+                            page_updates.push(PageUpdate { index: i, svg: svg.clone() });
+                            new_cache.push((fh, svg));
+                        }
+                        None => {
+                            // Reuse cached SVG string — frame is visually identical
+                            new_cache.push((fh, prev_cache[i].1.clone()));
+                        }
                     }
                 }
 
@@ -575,7 +586,7 @@ pub async fn compile_preview(
                     output: String::new(),
                     source_map: build_source_map(&world, &document),
                 });
-                (result, new_hashes)
+                (result, new_cache)
             }
             Err(diags) => {
                 let result = Ok(CompileResult {
@@ -592,9 +603,9 @@ pub async fn compile_preview(
     .await
     .map_err(|e| format!("Task join error: {}", e))?;
 
-    // Persist page hashes for next compilation
-    if !new_hashes.is_empty() {
-        font_cache.page_hashes.lock().unwrap().1 = new_hashes;
+    // Persist page cache for next compilation
+    if !new_cache.is_empty() {
+        font_cache.page_cache.lock().unwrap().1 = new_cache;
     }
 
     result
