@@ -141,21 +141,24 @@ function typstLocalCompletionSource(context: CompletionContext) {
   const m = textBefore.match(/#([a-zA-Z_][a-zA-Z0-9_-]*)?$/)
   if (!m) return null
 
-  const hashPos = line.from + (context.pos - line.from) - m[0].length
+  // from is positioned AFTER the '#' so that CodeMirror's filter text matches
+  // what the IDE source also uses (both use the identifier text, not '#'+ident).
+  const identLen = m[1]?.length ?? 0
+  const from = context.pos - identLen
   const typed = (m[1] ?? '').toLowerCase()
 
   const all = [
-    ...TYPST_KEYWORDS.map((k) => ({ label: '#' + k, type: 'keyword' as const })),
+    ...TYPST_KEYWORDS.map((k) => ({ label: k, type: 'keyword' as const })),
     ...TYPST_FUNCTIONS.map((f) => ({
-      label: '#' + f.label,
+      label: f.label,
       type: 'function' as const,
-      apply: '#' + f.label + '(',
+      apply: f.label + '(',
       detail: f.detail,
     })),
   ]
-  const options = typed ? all.filter((o) => o.label.slice(1).startsWith(typed)) : all
+  const options = typed ? all.filter((o) => o.label.startsWith(typed)) : all
 
-  return options.length > 0 ? { from: hashPos, options, validFor: /^#[a-zA-Z0-9_-]*$/ } : null
+  return options.length > 0 ? { from, options, validFor: /^[a-zA-Z0-9_-]*$/ } : null
 }
 
 // ---------------------------------------------------------------------------
