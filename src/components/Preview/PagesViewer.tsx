@@ -1,24 +1,25 @@
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect } from 'react'
+import { openUrl } from '@tauri-apps/plugin-opener'
 import { useAppStore } from '../../store/appStore'
+import { useBlobUrls } from '../../lib/useBlobUrls'
+import { jumpFromClick } from '../../tauri/commands'
 
 export function PagesViewer() {
-  const { pages, activePage, zoom, setActivePage, tmpPath } = useAppStore()
+  const pages = useAppStore(s => s.pages)
+  const activePage = useAppStore(s => s.activePage)
+  const zoom = useAppStore(s => s.zoom)
+  const tmpPath = useAppStore(s => s.tmpPath)
+  const entryFile = useAppStore(s => s.entryFile)
+  const setActivePage = useAppStore(s => s.setActivePage)
+  const setZoom = useAppStore(s => s.setZoom)
+  const setPendingJump = useAppStore(s => s.setPendingJump)
   const containerRef = useRef<HTMLDivElement>(null)
   const programmaticScrollRef = useRef(false)
   const zoomRef = useRef(zoom)
-  const [blobUrls, setBlobUrls] = useState<string[]>([])
+  const blobUrls = useBlobUrls(pages)
 
   // Keep zoomRef in sync so the ResizeObserver callback can read the latest value
   useEffect(() => { zoomRef.current = zoom }, [zoom])
-
-  // Convert SVG strings to Blob URLs — much faster to scroll than inline SVG DOM
-  useEffect(() => {
-    const urls = pages.map((svg) =>
-      URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }))
-    )
-    setBlobUrls(urls)
-    return () => urls.forEach((url) => URL.revokeObjectURL(url))
-  }, [pages])
 
   // Update --page-width CSS variable directly on the DOM (no React re-render on resize)
   useEffect(() => {
@@ -47,6 +48,21 @@ export function PagesViewer() {
     const w = Math.round((el.clientWidth - 32) * zoom)
     el.style.setProperty('--page-width', `${w}px`)
   }, [zoom])
+
+  // Ctrl+wheel zoom
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    function onWheel(e: WheelEvent) {
+      if (!e.ctrlKey) return
+      e.preventDefault()
+      const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1
+      const next = Math.min(3, Math.max(0.25, zoomRef.current * factor))
+      setZoom(Math.round(next * 100) / 100)
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [setZoom])
 
   // Scroll to page when activePage changes (e.g. from thumbnail click)
   useEffect(() => {
@@ -79,7 +95,7 @@ export function PagesViewer() {
     const pageEls = container.querySelectorAll('[data-page]')
     pageEls.forEach((el) => observer.observe(el))
     return () => observer.disconnect()
-  }, [pages, setActivePage])
+  }, [pages.length, setActivePage])
 
   if (!tmpPath) {
     return (
@@ -116,7 +132,25 @@ export function PagesViewer() {
             i === activePage ? 'ring-2 ring-[#89b4fa]' : ''
           }`}
           style={{ width: 'var(--page-width)' }}
-          onClick={() => setActivePage(i)}
+          onClick={(e) => {
+            setActivePage(i)
+            if (!e.ctrlKey || !tmpPath) return
+            const img = e.currentTarget.querySelector('img')
+            if (!img) return
+            const rect = img.getBoundingClientRect()
+            const xRatio = (e.clientX - rect.left) / rect.width
+            const yRatio = (e.clientY - rect.top) / rect.height
+            jumpFromClick(tmpPath, entryFile, i, xRatio, yRatio).then((result) => {
+              if (!result) return
+              if (result.file != null && result.byteOffset != null) {
+                setPendingJump({ file: result.file, byteOffset: result.byteOffset })
+              } else if (result.url) {
+                openUrl(result.url).catch(() => {})
+              } else if (result.page != null) {
+                setActivePage(result.page)
+              }
+            }).catch(() => {})
+          }}
         >
           <img
             src={url}

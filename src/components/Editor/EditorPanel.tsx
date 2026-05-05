@@ -15,7 +15,7 @@ import {
 } from "./CodeMirrorEditor";
 import { EditorTabs } from "./EditorTabs";
 
-const DEBOUNCE_MS = 500;
+const DEBOUNCE_MS = 700;
 
 function ts() {
   return new Date().toLocaleTimeString("fr-FR", {

@@ -3,6 +3,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
+use rayon::prelude::*;
 use std::time::SystemTime;
 use typst::syntax::package::PackageSpec;
 
@@ -545,12 +546,19 @@ pub async fn compile_preview(
                     &[]
                 };
 
+                // Serialize all pages in parallel, then collect in order
+                let serialized: Vec<(String, u64)> = document.pages
+                    .par_iter()
+                    .map(|page| {
+                        let svg = typst_svg::svg(page);
+                        let h = hash_str(&svg);
+                        (svg, h)
+                    })
+                    .collect();
+
                 let mut new_hashes = Vec::with_capacity(page_count);
                 let mut page_updates = Vec::new();
-
-                for (i, page) in document.pages.iter().enumerate() {
-                    let svg = typst_svg::svg(page);
-                    let h = hash_str(&svg);
+                for (i, (svg, h)) in serialized.into_iter().enumerate() {
                     new_hashes.push(h);
                     if effective_prev.get(i).copied() != Some(h) {
                         page_updates.push(PageUpdate { index: i, svg });
