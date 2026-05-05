@@ -46,6 +46,119 @@ const ctrlLinkField = StateField.define<DecorationSet>({
 });
 
 // ---------------------------------------------------------------------------
+// Local Typst completion source — instant, no compilation required
+// ---------------------------------------------------------------------------
+
+const TYPST_KEYWORDS = [
+  'set', 'let', 'if', 'else', 'for', 'while', 'return',
+  'import', 'include', 'show', 'context',
+  'and', 'or', 'not', 'in',
+  'none', 'auto', 'true', 'false', 'break', 'continue',
+]
+
+interface FuncEntry { label: string; detail: string }
+const TYPST_FUNCTIONS: FuncEntry[] = [
+  // Layout
+  { label: 'align',     detail: 'align content' },
+  { label: 'block',     detail: 'block container' },
+  { label: 'box',       detail: 'inline container' },
+  { label: 'columns',   detail: 'multi-column layout' },
+  { label: 'grid',      detail: 'grid layout' },
+  { label: 'h',         detail: 'horizontal space' },
+  { label: 'hide',      detail: 'invisible content' },
+  { label: 'layout',    detail: 'access layout info' },
+  { label: 'measure',   detail: 'measure content size' },
+  { label: 'move',      detail: 'move content' },
+  { label: 'pad',       detail: 'add padding' },
+  { label: 'page',      detail: 'page element' },
+  { label: 'pagebreak', detail: 'page break' },
+  { label: 'par',       detail: 'paragraph settings' },
+  { label: 'parbreak',  detail: 'paragraph break' },
+  { label: 'place',     detail: 'absolute placement' },
+  { label: 'repeat',    detail: 'repeat content' },
+  { label: 'rotate',    detail: 'rotate content' },
+  { label: 'scale',     detail: 'scale content' },
+  { label: 'skew',      detail: 'skew content' },
+  { label: 'stack',     detail: 'stack elements' },
+  { label: 'v',         detail: 'vertical space' },
+  // Text formatting
+  { label: 'emph',       detail: 'emphasis / italic' },
+  { label: 'highlight',  detail: 'highlight text' },
+  { label: 'linebreak',  detail: 'line break' },
+  { label: 'link',       detail: 'hyperlink' },
+  { label: 'lower',      detail: 'lowercase text' },
+  { label: 'overline',   detail: 'overline text' },
+  { label: 'raw',        detail: 'raw / code content' },
+  { label: 'smallcaps',  detail: 'small capitals' },
+  { label: 'strike',     detail: 'strikethrough' },
+  { label: 'strong',     detail: 'bold text' },
+  { label: 'sub',        detail: 'subscript' },
+  { label: 'super',      detail: 'superscript' },
+  { label: 'text',       detail: 'text styling' },
+  { label: 'underline',  detail: 'underline text' },
+  { label: 'upper',      detail: 'uppercase text' },
+  // Shapes & graphics
+  { label: 'circle',   detail: 'draw circle' },
+  { label: 'ellipse',  detail: 'draw ellipse' },
+  { label: 'image',    detail: 'insert image' },
+  { label: 'line',     detail: 'draw line' },
+  { label: 'path',     detail: 'draw path' },
+  { label: 'polygon',  detail: 'draw polygon' },
+  { label: 'rect',     detail: 'draw rectangle' },
+  // Document structure
+  { label: 'bibliography', detail: 'bibliography' },
+  { label: 'cite',         detail: 'citation' },
+  { label: 'counter',      detail: 'counter' },
+  { label: 'datetime',     detail: 'date / time value' },
+  { label: 'document',     detail: 'document metadata' },
+  { label: 'enum',         detail: 'numbered list' },
+  { label: 'figure',       detail: 'figure with caption' },
+  { label: 'footnote',     detail: 'footnote' },
+  { label: 'heading',      detail: 'heading element' },
+  { label: 'label',        detail: 'create label' },
+  { label: 'list',         detail: 'bullet list' },
+  { label: 'lorem',        detail: 'placeholder text' },
+  { label: 'numbering',    detail: 'number formatting' },
+  { label: 'outline',      detail: 'table of contents' },
+  { label: 'ref',          detail: 'cross-reference' },
+  { label: 'state',        detail: 'mutable state' },
+  { label: 'table',        detail: 'table' },
+  { label: 'terms',        detail: 'term list' },
+  // Utility
+  { label: 'assert', detail: 'assertion' },
+  { label: 'eval',   detail: 'evaluate string as code' },
+  { label: 'panic',  detail: 'raise error' },
+  { label: 'query',  detail: 'query elements' },
+  { label: 'range',  detail: 'integer range' },
+  { label: 'repr',   detail: 'value representation' },
+  { label: 'str',    detail: 'string conversion' },
+  { label: 'type',   detail: 'get value type' },
+]
+
+function typstLocalCompletionSource(context: CompletionContext) {
+  const line = context.state.doc.lineAt(context.pos)
+  const textBefore = line.text.slice(0, context.pos - line.from)
+  const m = textBefore.match(/#([a-zA-Z_][a-zA-Z0-9_-]*)?$/)
+  if (!m) return null
+
+  const hashPos = line.from + (context.pos - line.from) - m[0].length
+  const typed = (m[1] ?? '').toLowerCase()
+
+  const all = [
+    ...TYPST_KEYWORDS.map((k) => ({ label: '#' + k, type: 'keyword' as const })),
+    ...TYPST_FUNCTIONS.map((f) => ({
+      label: '#' + f.label,
+      type: 'function' as const,
+      apply: '#' + f.label + '(',
+      detail: f.detail,
+    })),
+  ]
+  const options = typed ? all.filter((o) => o.label.slice(1).startsWith(typed)) : all
+
+  return options.length > 0 ? { from: hashPos, options, validFor: /^#[a-zA-Z0-9_-]*$/ } : null
+}
+
+// ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
@@ -476,9 +589,14 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
         ]),
         autocompletion({
           override: [
-            // IDE-aware completions (explicit only — requires a full compilation)
+            // Fast local source: fires automatically when typing # + identifier
+            typstLocalCompletionSource,
+            // IDE-aware source: fires on explicit (Ctrl+Space) OR when in a # context
             async (context) => {
-              if (!context.explicit) return null
+              const line = context.state.doc.lineAt(context.pos)
+              const textBefore = line.text.slice(0, context.pos - line.from)
+              const inHashContext = /#[a-zA-Z_][a-zA-Z0-9_-]*$/.test(textBefore) || /#$/.test(textBefore)
+              if (!context.explicit && !inHashContext) return null
               const tmp = tmpPathRef.current
               const entry = entryFileRef.current
               const cf = currentFileRef.current
@@ -486,7 +604,7 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
               const text = context.state.doc.sliceString(0, context.pos)
               const cursorByte = new TextEncoder().encode(text).byteLength
               try {
-                const result = await getCompletions(tmp, entry, cf, cursorByte, true)
+                const result = await getCompletions(tmp, entry, cf, cursorByte, context.explicit)
                 if (!result || result.items.length === 0) return null
                 const from = byteOffsetToPos(context.state.doc, result.from)
                 return {
