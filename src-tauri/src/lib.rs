@@ -1,5 +1,6 @@
 mod commands;
 
+use tauri::Manager;
 use commands::{
     filesystem::{
         list_project, create_file, create_folder, rename_path, delete_path,
@@ -27,6 +28,17 @@ pub fn run() {
                     let _ = tauri::Emitter::emit(&handle, "open-typz", typz);
                 });
             }
+
+            // Force-quit when the main window closes, even if the preview popup is hidden.
+            let handle = app.handle().clone();
+            if let Some(main_win) = app.get_webview_window("main") {
+                main_win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Destroyed = event {
+                        handle.exit(0);
+                    }
+                });
+            }
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
