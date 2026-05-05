@@ -60,6 +60,7 @@ fn hash_str(s: &str) -> u64 {
 pub struct FontCache {
     pub book: Arc<LazyHash<FontBook>>,
     pub fonts: Arc<Vec<Font>>,
+    pub library: Arc<LazyHash<Library>>,
     /// Source file cache: absolute path → (mtime, parsed Source).
     /// Shared across all compilations; invalidated by mtime change.
     pub source_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Source)>>>,
@@ -105,6 +106,7 @@ impl FontCache {
         FontCache {
             book: Arc::new(LazyHash::new(book)),
             fonts: Arc::new(fonts),
+            library: Arc::new(LazyHash::new(Library::default())),
             source_cache: Arc::new(Mutex::new(HashMap::new())),
             file_cache: Arc::new(Mutex::new(HashMap::new())),
             page_hashes: Mutex::new((String::new(), Vec::new())),
@@ -119,7 +121,7 @@ impl FontCache {
 pub struct TypstWorld {
     root: PathBuf,
     main_id: FileId,
-    library: LazyHash<Library>,
+    library: Arc<LazyHash<Library>>,
     book: Arc<LazyHash<FontBook>>,
     fonts: Arc<Vec<Font>>,
     source_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Source)>>>,
@@ -134,18 +136,18 @@ impl TypstWorld {
         main_file: &str,
         book: Arc<LazyHash<FontBook>>,
         fonts: Arc<Vec<Font>>,
+        library: Arc<LazyHash<Library>>,
         source_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Source)>>>,
         file_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, Bytes)>>>,
     ) -> Self {
         let main_id = FileId::new(None, VirtualPath::new(main_file));
-        let library = LazyHash::new(Library::default());
         TypstWorld { root, main_id, library, book, fonts, source_cache, file_cache }
     }
 
     /// Convenience constructor for tests (loads its own fonts).
     pub fn new(root: PathBuf, main_file: &str) -> Self {
         let cache = FontCache::load();
-        Self::from_cache(root, main_file, cache.book, cache.fonts, cache.source_cache, cache.file_cache)
+        Self::from_cache(root, main_file, cache.book, cache.fonts, cache.library, cache.source_cache, cache.file_cache)
     }
 
     /// Resolve a FileId to an absolute path on disk.
@@ -519,6 +521,7 @@ pub async fn compile_preview(
 ) -> Result<CompileResult, String> {
     let book = Arc::clone(&font_cache.book);
     let fonts = Arc::clone(&font_cache.fonts);
+    let library = Arc::clone(&font_cache.library);
     let source_cache = Arc::clone(&font_cache.source_cache);
     let file_cache = Arc::clone(&font_cache.file_cache);
 
@@ -533,7 +536,7 @@ pub async fn compile_preview(
 
     let (result, new_hashes) = tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, source_cache, file_cache);
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache);
         let warned = typst::compile::<PagedDocument>(&world);
 
         match warned.output {
@@ -607,6 +610,7 @@ pub async fn export_project(
 ) -> Result<(), String> {
     let book = Arc::clone(&font_cache.book);
     let fonts = Arc::clone(&font_cache.fonts);
+    let library = Arc::clone(&font_cache.library);
     let source_cache = Arc::clone(&font_cache.source_cache);
     let file_cache = Arc::clone(&font_cache.file_cache);
 
@@ -622,7 +626,7 @@ pub async fn export_project(
         }
 
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, source_cache, file_cache);
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache);
 
         let warned = typst::compile::<PagedDocument>(&world);
 
