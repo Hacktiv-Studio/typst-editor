@@ -1,12 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "typst-editor",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "identifier": "fr.hacktiv-studio.typst-editor",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
+    "beforeBuildCommand": "npm run bump && npm run build",
     "frontendDist": "../dist"
   },
   "app": {
@@ -35,7 +35,9 @@
     ],
     "fileAssociations": [
       {
-        "ext": ["typz"],
+        "ext": [
+          "typz"
+        ],
         "name": "Typst Project",
         "description": "Typst Project File",
         "role": "Editor"

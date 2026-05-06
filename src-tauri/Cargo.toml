@@ -1,6 +1,6 @@
 [package]
 name = "typst-editor"
-version = "0.1.0"
+version = "0.1.1"
 description = "A visual Typst editor"
 authors = ["Hacktiv Studio"]
 edition = "2021"
