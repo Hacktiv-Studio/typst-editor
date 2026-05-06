@@ -206,5 +206,8 @@ export const listVersions = (tmpPath: string): Promise<VersionInfo[]> =>
 export const restoreVersion = (tmpPath: string, versionId: string): Promise<void> =>
   invoke('restore_version', { tmpPath, versionId })
 
+export const renderVersionPreview = (tmpPath: string, versionId: string): Promise<string[]> =>
+  invoke('render_version_preview', { tmpPath, versionId })
+
 export const cleanupStaleProjects = (currentTmp: string | null): Promise<void> =>
   invoke('cleanup_stale_projects', { currentTmp })

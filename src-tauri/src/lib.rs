@@ -10,7 +10,7 @@ use commands::{
     project::{new_project, open_project, save_project, cleanup_tmp, cleanup_stale_projects},
     compiler::{compile_preview, export_project, list_cached_packages, list_universe_packages, list_fonts, FontCache},
     ide::{get_completions, get_tooltip, goto_definition, jump_from_click_cmd, invalidate_compile_hashes},
-    versioning::{create_version, list_versions, restore_version},
+    versioning::{create_version, list_versions, restore_version, render_version_preview},
 };
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -51,7 +51,7 @@ pub fn run() {
             list_cached_packages, list_universe_packages, list_fonts,
             get_completions, get_tooltip, goto_definition,
             jump_from_click_cmd, invalidate_compile_hashes,
-            create_version, list_versions, restore_version,
+            create_version, list_versions, restore_version, render_version_preview,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

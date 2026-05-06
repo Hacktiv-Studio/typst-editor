@@ -1,9 +1,15 @@
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
+use std::time::SystemTime;
 
 use chrono::{Datelike, Local, Timelike};
 use git2::{IndexAddOption, Repository, ResetType, Signature, Sort};
 use serde::{Deserialize, Serialize};
 use tauri::command;
+use typst::layout::PagedDocument;
+
+use crate::commands::compiler::{FontCache, TypstWorld};
 
 // ---------------------------------------------------------------------------
 // Types
@@ -178,6 +184,93 @@ pub async fn restore_version(tmp_path: String, version_id: String) -> Result<(),
         repo.reset(&obj, ResetType::Hard, None)
             .map_err(|e| e.to_string())?;
         Ok(())
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
+}
+
+// ---------------------------------------------------------------------------
+// Version preview
+// ---------------------------------------------------------------------------
+
+/// Recursively extracts a git tree into `out_dir` on the filesystem.
+fn extract_tree_to(repo: &Repository, tree: &git2::Tree, out_dir: &Path) -> Result<(), String> {
+    for entry in tree.iter() {
+        let name = match entry.name() {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        match entry.kind() {
+            Some(git2::ObjectType::Tree) => {
+                let subtree = repo.find_tree(entry.id()).map_err(|e| e.to_string())?;
+                let subdir = out_dir.join(&name);
+                std::fs::create_dir_all(&subdir).map_err(|e| e.to_string())?;
+                extract_tree_to(repo, &subtree, &subdir)?;
+            }
+            Some(git2::ObjectType::Blob) => {
+                let blob = repo.find_blob(entry.id()).map_err(|e| e.to_string())?;
+                std::fs::write(out_dir.join(&name), blob.content())
+                    .map_err(|e| e.to_string())?;
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Compiles `main.typ` from a directory and returns the SVG of each page.
+fn compile_dir(
+    dir: &Path,
+    book: Arc<typst::utils::LazyHash<typst::text::FontBook>>,
+    fonts: Arc<Vec<typst::text::Font>>,
+    library: Arc<typst::utils::LazyHash<typst::Library>>,
+) -> Vec<String> {
+    let source_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, typst::syntax::Source)>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+    let file_cache: Arc<Mutex<HashMap<PathBuf, (SystemTime, typst::foundations::Bytes)>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+
+    let world = TypstWorld::from_cache(
+        dir.to_path_buf(),
+        "main.typ",
+        book,
+        fonts,
+        library,
+        source_cache,
+        file_cache,
+        None,
+    );
+
+    let result = typst::compile::<PagedDocument>(&world);
+    comemo::evict(30);
+
+    match result.output {
+        Ok(doc) => doc.pages.iter().map(|p| typst_svg::svg(p)).collect(),
+        Err(_) => vec![],
+    }
+}
+
+#[command]
+pub async fn render_version_preview(
+    font_cache: tauri::State<'_, FontCache>,
+    tmp_path: String,
+    version_id: String,
+) -> Result<Vec<String>, String> {
+    let book = Arc::clone(&font_cache.book);
+    let fonts = Arc::clone(&font_cache.fonts);
+    let library = Arc::clone(&font_cache.library);
+
+    tokio::task::spawn_blocking(move || {
+        let data = data_dir(&tmp_path);
+        let repo = Repository::open(&data).map_err(|e| e.to_string())?;
+        let obj = repo.revparse_single(&version_id).map_err(|e| e.to_string())?;
+        let commit = obj.peel_to_commit().map_err(|e| e.to_string())?;
+        let tree = commit.tree().map_err(|e| e.to_string())?;
+
+        let temp = tempfile::TempDir::new().map_err(|e| e.to_string())?;
+        extract_tree_to(&repo, &tree, temp.path())?;
+
+        Ok(compile_dir(temp.path(), book, fonts, library))
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?
