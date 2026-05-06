@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use comemo;
 
 use serde::Serialize;
 use typst::layout::{PagedDocument, Point};
@@ -288,6 +289,20 @@ pub async fn jump_from_click_cmd(
 }
 
 #[tauri::command]
-pub async fn invalidate_compile_hashes(_tmp_path: String) -> Result<(), String> {
+pub async fn invalidate_compile_hashes(
+    font_cache: tauri::State<'_, FontCache>,
+    tmp_path: String,
+) -> Result<(), String> {
+    // Clear page-hash cache so next compile sends all pages, not just deltas
+    {
+        let mut pc = font_cache.page_cache.lock().unwrap();
+        if pc.0 == tmp_path {
+            pc.1.clear();
+        }
+    }
+    // Clear source cache so all files are re-read from disk
+    font_cache.source_cache.lock().unwrap().clear();
+    // Evict all comemo memoization entries
+    comemo::evict(0);
     Ok(())
 }

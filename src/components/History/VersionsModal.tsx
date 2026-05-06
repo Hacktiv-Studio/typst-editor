@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { FaClockRotateLeft, FaXmark, FaRotateLeft, FaEye, FaChevronLeft, FaChevronRight, FaArrowLeft, FaExpand, FaCompress } from 'react-icons/fa6'
 import { useTranslation } from '../../i18n/useTranslation'
 import { useAppStore } from '../../store/appStore'
-import { listVersions, restoreVersion, renderVersionPreview } from '../../tauri/commands'
+import { listVersions, restoreVersion, renderVersionPreview, invalidateCompileHashes } from '../../tauri/commands'
 import type { VersionInfo } from '../../tauri/commands'
 
 interface Props {
@@ -306,7 +306,10 @@ export function VersionsModal({ onClose }: Props) {
             fullscreen={fullscreen}
             onToggleFullscreen={() => setFullscreen(f => !f)}
             onBack={() => setPreviewing(null)}
-            onRestored={() => window.location.reload()}
+            onRestored={async () => {
+              await invalidateCompileHashes(tmpPath)
+              window.location.reload()
+            }}
           />
         ) : (
           <ListView

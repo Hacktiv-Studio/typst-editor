@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 
 use chrono::{Datelike, Local, Timelike};
-use git2::{IndexAddOption, Repository, ResetType, Signature, Sort};
+use git2::{IndexAddOption, Repository, Signature, Sort};
 use serde::{Deserialize, Serialize};
 use tauri::command;
 use typst::layout::PagedDocument;
@@ -178,11 +178,38 @@ pub async fn restore_version(tmp_path: String, version_id: String) -> Result<(),
     tokio::task::spawn_blocking(move || {
         let data = data_dir(&tmp_path);
         let repo = Repository::open(&data).map_err(|e| e.to_string())?;
-        let obj = repo
-            .revparse_single(&version_id)
-            .map_err(|e| e.to_string())?;
-        repo.reset(&obj, ResetType::Hard, None)
-            .map_err(|e| e.to_string())?;
+
+        let obj = repo.revparse_single(&version_id).map_err(|e| e.to_string())?;
+        let target_commit = obj.peel_to_commit().map_err(|e| e.to_string())?;
+        let restore_label = format!(
+            "Restauration : {}",
+            target_commit.message().unwrap_or("").trim()
+        );
+        let tree = target_commit.tree().map_err(|e| e.to_string())?;
+
+        // Remove all tracked files from the working directory (keep .git)
+        for entry in std::fs::read_dir(&data).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            if entry.file_name() == ".git" {
+                continue;
+            }
+            let path = entry.path();
+            if path.is_dir() {
+                std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
+            } else {
+                std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+            }
+        }
+
+        // Extract the target version's files into the working directory
+        extract_tree_to(&repo, &tree, &data)?;
+
+        // Stage all changes and create a new commit on top of the current HEAD
+        stage_all(&repo)?;
+        if has_staged_changes(&repo)? {
+            commit(&repo, &restore_label)?;
+        }
+
         Ok(())
     })
     .await
