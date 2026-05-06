@@ -15,7 +15,8 @@ import {
   FaXmark,
   FaCircleQuestion,
   FaClockRotateLeft,
-} from "react-icons/fa6";
+  FaGear,
+} from 'react-icons/fa6'
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { useAppStore } from "../store/appStore";
 import {
@@ -37,6 +38,7 @@ type PendingSwitch = "none" | "newProject" | "openProject" | "openRecent";
 export function Sidebar() {
   const [exportOpen, setExportOpen] = useState(false);
   const [recentOpen, setRecentOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
   const [pendingSwitch, setPendingSwitch] = useState<PendingSwitch>("none");
   const [pendingRecentPath, setPendingRecentPath] = useState<string | null>(
     null,
@@ -64,8 +66,7 @@ export function Sidebar() {
     toggleSearch,
     searchVisible,
     openVersionsModal,
-    language,
-    setLanguage,
+    openSettingsModal,
   } = useAppStore();
   const { t } = useTranslation();
 
@@ -74,6 +75,7 @@ export function Sidebar() {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
         setExportOpen(false);
         setRecentOpen(false);
+        setSaveOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClick);
@@ -236,54 +238,47 @@ export function Sidebar() {
   // ── Render ────────────────────────────────────────────────
 
   return (
-    <div className="w-11 bg-[#181825] flex flex-col items-center py-3 gap-3 border-r border-[#313244] flex-shrink-0 relative z-20">
+    <div className="w-11 bg-[#181825] flex flex-col items-center py-3 gap-1 border-r border-[#313244] flex-shrink-0 relative z-20">
       {/* Logo */}
-      <div className="w-7 h-7 bg-[#89b4fa] rounded-md flex items-center justify-center text-[#11111b] font-black text-sm">
+      <div className="w-7 h-7 bg-[#89b4fa] rounded-md flex items-center justify-center text-[#11111b] font-black text-sm mb-2">
         T
       </div>
 
-      {/* Actions */}
-      <div className="mt-2 flex flex-col gap-2" ref={menuRef}>
+      {/* ── Groupe 1 : Projet ── */}
+      <div className="flex flex-col gap-1 items-center" ref={menuRef}>
+        {/* Nouveau projet */}
         <button
-          title={t("sidebar.newProject")}
+          title={t('sidebar.newProject')}
           onClick={handleNewProject}
           className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors"
         >
           <FaFolderPlus size={15} />
         </button>
 
-        {/* Open button with recent projects dropdown */}
+        {/* Ouvrir / Récents */}
         <div className="relative">
           <button
-            title={t("sidebar.openProject")}
-            onClick={() => setRecentOpen((o) => !o)}
-            className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors"
+            title={t('sidebar.openProject')}
+            onClick={() => { setSaveOpen(false); setRecentOpen((o) => !o) }}
+            className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors relative"
           >
             <FaFolderOpen size={15} />
+            <span className="absolute bottom-1 right-1 w-1 h-1 rounded-full bg-[#89b4fa] opacity-70" />
           </button>
 
           {recentOpen && (
             <div className="absolute left-10 top-0 bg-[#313244] border border-[#45475a] rounded-lg w-72 shadow-xl z-50 flex flex-col max-h-[70vh]">
               <div className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-[#585b70] border-b border-[#45475a]">
-                {t("recent.title")}
+                {t('recent.title')}
               </div>
               <div className="flex-1 overflow-y-auto">
                 {recentProjects.length === 0 ? (
-                  <div className="px-3 py-3 text-[10px] text-[#585b70]">
-                    {t("recent.empty")}
-                  </div>
+                  <div className="px-3 py-3 text-[10px] text-[#585b70]">{t('recent.empty')}</div>
                 ) : (
                   recentProjects.map((path) => {
-                    const normalized = path.replace(/\\/g, "/");
-                    const name =
-                      normalized
-                        .split("/")
-                        .pop()
-                        ?.replace(/\.typz$/i, "") ?? path;
-                    const dir = normalized
-                      .split("/")
-                      .slice(0, -1)
-                      .join("/");
+                    const normalized = path.replace(/\\/g, '/')
+                    const name = normalized.split('/').pop()?.replace(/\.typz$/i, '') ?? path
+                    const dir = normalized.split('/').slice(0, -1).join('/')
                     return (
                       <div
                         key={path}
@@ -291,110 +286,129 @@ export function Sidebar() {
                         onClick={() => handleOpenFromRecent(path)}
                       >
                         <div className="flex-1 min-w-0">
-                          <div className="text-[#cdd6f4] text-[11px] font-medium truncate">
-                            {name}
-                          </div>
-                          <div className="text-[9px] text-[#585b70] truncate">
-                            {dir}
-                          </div>
+                          <div className="text-[#cdd6f4] text-[11px] font-medium truncate">{name}</div>
+                          <div className="text-[9px] text-[#585b70] truncate">{dir}</div>
                         </div>
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeRecentProject(path);
-                          }}
-                          title={t("recent.remove")}
+                          onClick={(e) => { e.stopPropagation(); removeRecentProject(path) }}
+                          title={t('recent.remove')}
                           className="opacity-0 group-hover:opacity-100 text-[#585b70] hover:text-[#f38ba8] transition-all shrink-0"
                         >
                           <FaXmark size={10} />
                         </button>
                       </div>
-                    );
+                    )
                   })
                 )}
               </div>
               <div className="border-t border-[#45475a] p-1.5">
                 <button
-                  onClick={() => {
-                    setRecentOpen(false);
-                    handleOpenProject();
-                  }}
+                  onClick={() => { setRecentOpen(false); handleOpenProject() }}
                   className="w-full flex items-center gap-2 px-2 py-1.5 text-[10px] text-[#a6adc8] hover:text-[#cdd6f4] hover:bg-[#45475a] rounded-md transition-colors"
                 >
                   <FaFolderOpen size={10} />
-                  {t("recent.browse")}
+                  {t('recent.browse')}
                 </button>
               </div>
             </div>
           )}
         </div>
 
-        <button
-          title={t("sidebar.save")}
-          onClick={handleSave}
-          disabled={!tmpPath}
-          className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#585b70]"
-        >
-          <FaFloppyDisk size={14} />
-        </button>
-        <button
-          title={t("sidebar.saveAs")}
-          onClick={handleSaveAs}
-          disabled={!tmpPath}
-          className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#585b70]"
-        >
-          <FaArrowsDownToLine size={14} />
-        </button>
+        {/* Enregistrer (sous-menu) */}
+        <div className="relative">
+          <button
+            title={t('sidebar.saveMenu')}
+            disabled={!tmpPath}
+            onClick={() => { setRecentOpen(false); setSaveOpen((o) => !o) }}
+            className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#585b70] relative"
+          >
+            <FaFloppyDisk size={14} />
+            <span className="absolute bottom-1 right-1 w-1 h-1 rounded-full bg-[#89b4fa] opacity-70" />
+          </button>
+
+          {saveOpen && (
+            <div className="absolute left-10 top-0 bg-[#313244] border border-[#45475a] rounded-lg w-44 shadow-xl overflow-hidden z-50">
+              <div className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-[#585b70] border-b border-[#45475a]">
+                {t('sidebar.saveMenu')}
+              </div>
+              <button
+                onClick={() => { setSaveOpen(false); handleSave() }}
+                className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-[#45475a] transition-colors text-left"
+              >
+                <div className="w-7 h-7 rounded-md bg-[#89b4fa20] text-[#89b4fa] flex items-center justify-center text-sm flex-shrink-0">
+                  <FaFloppyDisk size={12} />
+                </div>
+                <div>
+                  <div className="text-[#cdd6f4] font-semibold text-[11px]">{t('sidebar.saveMenu')}</div>
+                  <div className="text-[#585b70] text-[9px]">Ctrl+S</div>
+                </div>
+              </button>
+              <button
+                onClick={() => { setSaveOpen(false); handleSaveAs() }}
+                className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-[#45475a] transition-colors text-left"
+              >
+                <div className="w-7 h-7 rounded-md bg-[#fab38720] text-[#fab387] flex items-center justify-center text-sm flex-shrink-0">
+                  <FaArrowsDownToLine size={12} />
+                </div>
+                <div>
+                  <div className="text-[#cdd6f4] font-semibold text-[11px]">{t('sidebar.saveAsFull')}</div>
+                  <div className="text-[#585b70] text-[9px]">Ctrl+Shift+S</div>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Bottom actions */}
-      <div className="mt-auto flex flex-col gap-2 items-center">
+      <div className="h-px bg-[#313244] w-6 mx-auto my-1" />
+
+      {/* ── Groupe 2 : Vues ── */}
+      <div className="flex flex-col gap-1 items-center">
         <button
-          title={t("sidebar.explorer")}
+          title={t('sidebar.explorer')}
           onClick={toggleExplorer}
           className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
-            explorerVisible
-              ? "bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]"
-              : "text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]"
+            explorerVisible ? 'bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]' : 'text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]'
           }`}
         >
           <FaTableColumns size={13} />
         </button>
         <button
-          title={t("sidebar.preview")}
+          title={t('sidebar.preview')}
           onClick={togglePreview}
           className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
-            previewVisible
-              ? "bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]"
-              : "text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]"
+            previewVisible ? 'bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]' : 'text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]'
           }`}
         >
           <FaEye size={13} />
         </button>
         <button
-          title={t("sidebar.search")}
+          title={t('sidebar.search')}
           onClick={toggleSearch}
           className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
-            searchVisible
-              ? "bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]"
-              : "text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]"
+            searchVisible ? 'bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]' : 'text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]'
           }`}
         >
           <FaMagnifyingGlass size={13} />
         </button>
         <button
-          title={t("sidebar.diagnostics")}
+          title={t('sidebar.diagnostics')}
           onClick={toggleDiagnostics}
           className={`w-8 h-8 flex items-center justify-center rounded-md transition-colors ${
-            diagnosticsVisible
-              ? "bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]"
-              : "text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]"
+            diagnosticsVisible ? 'bg-[#89b4fa] text-[#11111b] hover:bg-[#74c7ec]' : 'text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]'
           }`}
         >
           <FaTerminal size={13} />
         </button>
+      </div>
+
+      {/* Spacer */}
+      <div className="flex-1" />
+
+      {/* ── Groupe 3 : Outils ── */}
+      <div className="flex flex-col gap-1 items-center">
         <button
-          title={t("sidebar.history")}
+          title={t('sidebar.history')}
           onClick={openVersionsModal}
           disabled={!tmpPath}
           className="w-8 h-8 flex items-center justify-center rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244]"
@@ -405,59 +419,35 @@ export function Sidebar() {
         {/* Export */}
         <div className="relative">
           <button
-            title={t("sidebar.export")}
+            title={t('sidebar.export')}
             disabled={!tmpPath}
             onClick={() => setExportOpen((o) => !o)}
-            className="w-8 h-8 flex items-center justify-center bg-[#89b4fa] text-[#11111b] rounded-md hover:bg-[#74c7ec] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#89b4fa]"
+            className="w-8 h-8 flex items-center justify-center bg-[#89b4fa] text-[#11111b] rounded-md hover:bg-[#74c7ec] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#89b4fa] relative"
           >
             <FaFileExport size={15} />
+            <span className="absolute bottom-1 right-1 w-1 h-1 rounded-full bg-[#11111b] opacity-50" />
           </button>
 
           {exportOpen && (
             <div className="absolute left-10 bottom-0 bg-[#313244] border border-[#45475a] rounded-lg w-44 shadow-xl overflow-hidden z-50">
               <div className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-[#585b70] border-b border-[#45475a]">
-                {t("sidebar.exportTitle")}
+                {t('sidebar.exportTitle')}
               </div>
               {[
-                {
-                  format: "pdf" as const,
-                  icon: <FaFilePdf />,
-                  label: "PDF",
-                  desc: t("sidebar.exportPdfDesc"),
-                  color: "text-[#f38ba8]",
-                  bg: "bg-[#f38ba820]",
-                },
-                {
-                  format: "png" as const,
-                  icon: <FaFileImage />,
-                  label: "PNG",
-                  desc: t("sidebar.exportPngDesc"),
-                  color: "text-[#a6e3a1]",
-                  bg: "bg-[#a6e3a120]",
-                },
-                {
-                  format: "svg" as const,
-                  icon: <FaVectorSquare />,
-                  label: "SVG",
-                  desc: t("sidebar.exportSvgDesc"),
-                  color: "text-[#89b4fa]",
-                  bg: "bg-[#89b4fa20]",
-                },
+                { format: 'pdf' as const, icon: <FaFilePdf />, label: 'PDF', desc: t('sidebar.exportPdfDesc'), color: 'text-[#f38ba8]', bg: 'bg-[#f38ba820]' },
+                { format: 'png' as const, icon: <FaFileImage />, label: 'PNG', desc: t('sidebar.exportPngDesc'), color: 'text-[#a6e3a1]', bg: 'bg-[#a6e3a120]' },
+                { format: 'svg' as const, icon: <FaVectorSquare />, label: 'SVG', desc: t('sidebar.exportSvgDesc'), color: 'text-[#89b4fa]', bg: 'bg-[#89b4fa20]' },
               ].map(({ format, icon, label, desc, color, bg }) => (
                 <button
                   key={format}
                   onClick={() => handleExport(format)}
                   className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-[#45475a] transition-colors text-left"
                 >
-                  <div
-                    className={`w-7 h-7 rounded-md ${bg} ${color} flex items-center justify-center text-sm flex-shrink-0`}
-                  >
+                  <div className={`w-7 h-7 rounded-md ${bg} ${color} flex items-center justify-center text-sm flex-shrink-0`}>
                     {icon}
                   </div>
                   <div>
-                    <div className="text-[#cdd6f4] font-semibold text-[11px]">
-                      {label}
-                    </div>
+                    <div className="text-[#cdd6f4] font-semibold text-[11px]">{label}</div>
                     <div className="text-[#585b70] text-[9px]">{desc}</div>
                   </div>
                 </button>
@@ -466,18 +456,18 @@ export function Sidebar() {
           )}
         </div>
 
-        <div className="h-px bg-[#313244] w-6 mx-auto" />
+        <div className="h-px bg-[#313244] w-6 mx-auto my-1" />
 
-        {/* Language toggle */}
+        {/* Paramètres */}
         <button
-          title={language === 'fr' ? 'Switch to English' : 'Passer en français'}
-          onClick={() => setLanguage(language === 'fr' ? 'en' : 'fr')}
-          className="w-8 h-8 flex items-center justify-center text-[#45475a] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors text-[9px] font-bold tracking-wide"
+          title={t('sidebar.settings')}
+          onClick={openSettingsModal}
+          className="w-8 h-8 flex items-center justify-center text-[#cba6f7] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors"
         >
-          {language === 'fr' ? 'EN' : 'FR'}
+          <FaGear size={13} />
         </button>
 
-        {/* Help */}
+        {/* Aide */}
         <button
           title={t('sidebar.help')}
           onClick={() => openUrl('https://typst.app/docs/')}
@@ -488,42 +478,40 @@ export function Sidebar() {
       </div>
 
       {/* Save-before-switch dialog */}
-      {pendingSwitch !== "none" && (
+      {pendingSwitch !== 'none' && (
         <Dialog
-          title={t("sidebar.unsavedTitle")}
-          onClose={() => setPendingSwitch("none")}
+          title={t('sidebar.unsavedTitle')}
+          onClose={() => setPendingSwitch('none')}
           actions={
             <>
               <button
-                onClick={() => setPendingSwitch("none")}
+                onClick={() => setPendingSwitch('none')}
                 className="px-3 py-1.5 text-xs text-[#a6adc8] hover:text-[#cdd6f4] rounded-md hover:bg-[#313244] transition-colors"
               >
-                {t("sidebar.cancel")}
+                {t('sidebar.cancel')}
               </button>
               <button
                 onClick={handleDiscardAndSwitch}
                 className="px-3 py-1.5 text-xs text-[#f38ba8] hover:text-[#cdd6f4] rounded-md hover:bg-[#313244] transition-colors"
               >
-                {t("sidebar.dontSave")}
+                {t('sidebar.dontSave')}
               </button>
               <button
                 onClick={handleSaveAndSwitch}
                 className="px-3 py-1.5 text-xs bg-[#89b4fa] text-[#11111b] rounded-md hover:bg-[#74c7ec] transition-colors"
               >
-                {t("sidebar.saveBtn")}
+                {t('sidebar.saveBtn')}
               </button>
             </>
           }
         >
           <p className="text-sm text-[#a6adc8]">
-            {t("sidebar.unsavedMessage")}
+            {t('sidebar.unsavedMessage')}
             <br />
-            <span className="text-xs text-[#585b70] mt-1 block">
-              {t("sidebar.unsavedHint")}
-            </span>
+            <span className="text-xs text-[#585b70] mt-1 block">{t('sidebar.unsavedHint')}</span>
           </p>
         </Dialog>
       )}
     </div>
-  );
+  )
 }
