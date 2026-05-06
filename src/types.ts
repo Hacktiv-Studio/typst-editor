@@ -57,6 +57,7 @@ export interface AppState {
   diagnosticsVisible: boolean
   searchVisible: boolean
   versionsModalOpen: boolean
+  settingsModalOpen: boolean
   diagnosticsHeight: number
   progress: ProgressState
   recentProjects: string[]
@@ -90,6 +91,8 @@ export interface AppState {
   toggleSearch: () => void
   openVersionsModal: () => void
   closeVersionsModal: () => void
+  openSettingsModal: () => void
+  closeSettingsModal: () => void
   setDiagnosticsHeight: (h: number) => void
   setProgress: (p: Partial<ProgressState>) => void
   addRecentProject: (path: string) => void
