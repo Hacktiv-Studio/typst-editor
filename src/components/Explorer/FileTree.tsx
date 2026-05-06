@@ -301,7 +301,16 @@ export function FileTree() {
   }
 
   function entryMenuItems(entry: ProjectEntry): ContextMenuEntry[] {
+    const dirItems: ContextMenuEntry[] = entry.isDir ? [
+      { label: 'Nouveau fichier', onClick: () => setDialog({ type: 'newFile', parentDir: entry.path }) },
+      { label: 'Nouveau dossier', onClick: () => setDialog({ type: 'newFolder', parentDir: entry.path }) },
+      'separator',
+      { label: 'Importer un fichier', onClick: () => handleImportFile(entry.path) },
+      { label: 'Importer un dossier', onClick: () => handleImportFolder(entry.path) },
+      'separator',
+    ] : []
     return [
+      ...dirItems,
       { label: 'Renommer', onClick: () => setDialog({ type: 'rename', entry }) },
       'separator',
       { label: 'Supprimer', onClick: () => setDialog({ type: 'delete', entry }), danger: true },
