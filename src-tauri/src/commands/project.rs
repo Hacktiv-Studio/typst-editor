@@ -119,9 +119,6 @@ pub async fn open_project(
                 } else if let Some(rel) = name.strip_prefix("cache/") {
                     let cache_dir = dir_clone.join("cache");
                     safe_join(&cache_dir, rel).map_err(|e| e.to_string())?
-                } else if let Some(rel) = name.strip_prefix("versions/") {
-                    let versions_dir = dir_clone.join("versions");
-                    safe_join(&versions_dir, rel).map_err(|e| e.to_string())?
                 } else {
                     // Skip unknown top-level entries in new format
                     continue;
@@ -173,10 +170,9 @@ pub async fn save_project(
     let typz = PathBuf::from(&typz_path);
     let data_dir = tmp.join("data");
     let cache_dir = tmp.join("cache");
-    let versions_dir = tmp.join("versions");
 
     tokio::task::spawn_blocking(move || -> Result<(), String> {
-        // Collect data/ entries (always present)
+        // Collect data/ entries (always present, includes .git history)
         let data_entries: Vec<_> = WalkDir::new(&data_dir)
             .into_iter()
             .filter_map(|e| e.ok())
@@ -192,17 +188,7 @@ pub async fn save_project(
         } else {
             vec![]
         };
-        // Collect versions/ entries (optional)
-        let versions_entries: Vec<_> = if versions_dir.exists() {
-            WalkDir::new(&versions_dir)
-                .into_iter()
-                .filter_map(|e| e.ok())
-                .filter(|e| e.path() != versions_dir)
-                .collect()
-        } else {
-            vec![]
-        };
-        let total = data_entries.len() + cache_entries.len() + versions_entries.len();
+        let total = data_entries.len() + cache_entries.len();
 
         let file = std::fs::File::create(&typz).map_err(|e| e.to_string())?;
         let mut zip = ZipWriter::new(file);
@@ -250,27 +236,6 @@ pub async fn save_project(
                 total,
             });
         }
-        for entry in &versions_entries {
-            let path = entry.path();
-            let rel = format!(
-                "versions/{}",
-                path.strip_prefix(&versions_dir).unwrap_or(path).to_string_lossy()
-            );
-            if path.is_dir() {
-                zip.add_directory(format!("{}/", rel), options).map_err(|e| e.to_string())?;
-            } else {
-                zip.start_file(&rel, options).map_err(|e| e.to_string())?;
-                let data = std::fs::read(path).map_err(|e| e.to_string())?;
-                zip.write_all(&data).map_err(|e| e.to_string())?;
-            }
-            i += 1;
-            let _ = app.emit("progress", ProgressPayload {
-                label: "Sauvegarde en cours...".into(),
-                current: i,
-                total,
-            });
-        }
-
         zip.finish().map_err(|e| e.to_string())?;
         Ok(())
     })

@@ -83,9 +83,11 @@ export function VersionsModal({ onClose }: Props) {
               >
                 <div className="min-w-0 flex-1">
                   <div className="text-[#cdd6f4] text-[13px] font-mono">{v.label}</div>
-                  <div className="text-[10px] text-[#585b70] mt-0.5">
-                    {(v.size / 1024).toFixed(1)} KB
-                  </div>
+                  {v.size > 0 && (
+                    <div className="text-[10px] text-[#585b70] mt-0.5">
+                      {(v.size / 1024).toFixed(1)} KB
+                    </div>
+                  )}
                 </div>
 
                 {confirming === v.id ? (
