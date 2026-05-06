@@ -14,10 +14,12 @@ import {
   FaMagnifyingGlass,
   FaXmark,
   FaCircleQuestion,
+  FaPowerOff,
   FaClockRotateLeft,
   FaGear,
 } from 'react-icons/fa6'
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { useAppStore } from "../store/appStore";
 import {
   newProject,
@@ -476,6 +478,15 @@ export function Sidebar() {
           className="w-8 h-8 flex items-center justify-center text-[#45475a] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors"
         >
           <FaCircleQuestion size={13} />
+        </button>
+
+        {/* Fermer */}
+        <button
+          title={t('sidebar.quit')}
+          onClick={() => getCurrentWindow().close()}
+          className="w-8 h-8 flex items-center justify-center text-[#45475a] hover:text-[#f38ba8] hover:bg-[#313244] rounded-md transition-colors"
+        >
+          <FaPowerOff size={12} />
         </button>
       </div>
 
