@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use serde::Serialize;
 use typst::layout::{PagedDocument, Point};
-use typst::syntax::{FileId, Side, VirtualPath};
+use typst::syntax::{FileId, Side, Source, VirtualPath};
 use typst::World;
 use typst_ide::{
     autocomplete, definition, jump_from_click, tooltip, CompletionKind, Definition, IdeWorld,
@@ -88,6 +88,7 @@ pub async fn get_completions(
     tmp_path: String,
     entry_file: String,
     current_file: String,
+    content: String,
     cursor_byte: usize,
     explicit: bool,
 ) -> Result<Option<CompletionsResult>, String> {
@@ -99,7 +100,9 @@ pub async fn get_completions(
 
     tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, None);
+        let live_id = FileId::new(None, VirtualPath::new(&current_file));
+        let live_source = Some((live_id, Source::new(live_id, content)));
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, live_source);
         let document = compile_for_ide(&world);
 
         let current_id = FileId::new(None, VirtualPath::new(&current_file));
@@ -132,6 +135,7 @@ pub async fn get_tooltip(
     tmp_path: String,
     entry_file: String,
     current_file: String,
+    content: String,
     cursor_byte: usize,
 ) -> Result<Option<String>, String> {
     let book = Arc::clone(&font_cache.book);
@@ -142,7 +146,9 @@ pub async fn get_tooltip(
 
     tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, None);
+        let live_id = FileId::new(None, VirtualPath::new(&current_file));
+        let live_source = Some((live_id, Source::new(live_id, content)));
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, live_source);
         let document = compile_for_ide(&world);
 
         let current_id = FileId::new(None, VirtualPath::new(&current_file));
@@ -167,6 +173,7 @@ pub async fn goto_definition(
     tmp_path: String,
     entry_file: String,
     current_file: String,
+    content: String,
     cursor_byte: usize,
 ) -> Result<Option<JumpResult>, String> {
     let book = Arc::clone(&font_cache.book);
@@ -177,7 +184,9 @@ pub async fn goto_definition(
 
     tokio::task::spawn_blocking(move || {
         let root = PathBuf::from(&tmp_path).join("data");
-        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, None);
+        let live_id = FileId::new(None, VirtualPath::new(&current_file));
+        let live_source = Some((live_id, Source::new(live_id, content)));
+        let world = TypstWorld::from_cache(root, &entry_file, book, fonts, library, source_cache, file_cache, live_source);
         let document = compile_for_ide(&world);
 
         let current_id = FileId::new(None, VirtualPath::new(&current_file));

@@ -150,26 +150,29 @@ export const getCompletions = (
   tmpPath: string,
   entryFile: string,
   currentFile: string,
+  content: string,
   cursorByte: number,
   explicit: boolean
 ): Promise<CompletionsResult | null> =>
-  invoke('get_completions', { tmpPath, entryFile, currentFile, cursorByte, explicit })
+  invoke('get_completions', { tmpPath, entryFile, currentFile, content, cursorByte, explicit })
 
 export const getTooltip = (
   tmpPath: string,
   entryFile: string,
   currentFile: string,
+  content: string,
   cursorByte: number
 ): Promise<string | null> =>
-  invoke('get_tooltip', { tmpPath, entryFile, currentFile, cursorByte })
+  invoke('get_tooltip', { tmpPath, entryFile, currentFile, content, cursorByte })
 
 export const gotoDefinition = (
   tmpPath: string,
   entryFile: string,
   currentFile: string,
+  content: string,
   cursorByte: number
 ): Promise<JumpResult | null> =>
-  invoke('goto_definition', { tmpPath, entryFile, currentFile, cursorByte })
+  invoke('goto_definition', { tmpPath, entryFile, currentFile, content, cursorByte })
 
 export const jumpFromClick = (
   tmpPath: string,

@@ -641,8 +641,9 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
               if (!tmp || !entry || !cf) return null
               const text = context.state.doc.sliceString(0, context.pos)
               const cursorByte = new TextEncoder().encode(text).byteLength
+              const fullContent = context.state.doc.toString()
               try {
-                const result = await getCompletions(tmp, entry, cf, cursorByte, context.explicit)
+                const result = await getCompletions(tmp, entry, cf, fullContent, cursorByte, context.explicit)
                 if (!result || result.items.length === 0) return null
                 const from = byteOffsetToPos(context.state.doc, result.from)
                 return {
@@ -669,8 +670,9 @@ export const CodeMirrorEditor = forwardRef<CodeMirrorEditorHandle, Props>(
           if (!tmp || !entry || !cf) return null
           const text = view.state.doc.sliceString(0, pos)
           const cursorByte = new TextEncoder().encode(text).byteLength
+          const fullContent = view.state.doc.toString()
           try {
-            const tip = await getTooltip(tmp, entry, cf, cursorByte)
+            const tip = await getTooltip(tmp, entry, cf, fullContent, cursorByte)
             if (!tip) return null
             return {
               pos,

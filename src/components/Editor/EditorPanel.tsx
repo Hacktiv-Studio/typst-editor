@@ -231,7 +231,7 @@ export function EditorPanel() {
       }
     }
 
-    const result = await gotoDefinition(tmpPath, entryFile, activeFile, cursorByte).catch(() => null);
+    const result = await gotoDefinition(tmpPath, entryFile, activeFile, content, cursorByte).catch(() => null);
     if (!result) return;
     if (result.file != null && result.byteOffset != null) {
       setPendingJump({ file: result.file, byteOffset: result.byteOffset });
