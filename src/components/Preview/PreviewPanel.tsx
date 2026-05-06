@@ -1,5 +1,5 @@
-import { useCallback, useEffect } from "react";
-import { emitTo, listen } from "@tauri-apps/api/event";
+import { useCallback } from "react";
+import { emitTo } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
   FaArrowUpRightFromSquare,
@@ -25,15 +25,6 @@ export function PreviewPanel() {
     toggleThumbnails,
   } = useAppStore();
   const { t } = useTranslation();
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen("preview-popup-hidden", () => {
-      useAppStore.setState({ previewVisible: true });
-    }).then((fn) => {
-      unlisten = fn;
-    });
-    return () => unlisten?.();
-  }, []);
 
   const handlePopout = useCallback(async () => {
     const existing = await WebviewWindow.getByLabel("preview-popup");
@@ -41,7 +32,6 @@ export function PreviewPanel() {
       await emitTo("preview-popup", "update-popup-tmppath", tmpPath).catch(() => {});
       await existing.show().catch(() => {});
       await existing.setFocus().catch(() => {});
-      useAppStore.setState({ previewVisible: false });
       return;
     }
     const url = tmpPath
@@ -53,7 +43,6 @@ export function PreviewPanel() {
       width: 800,
       height: 1000,
     });
-    useAppStore.setState({ previewVisible: false });
   }, [tmpPath]);
 
   if (!previewVisible) return null;
