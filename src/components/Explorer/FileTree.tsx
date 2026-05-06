@@ -31,18 +31,16 @@ function TreeNode({
   entry,
   depth = 0,
   onContextMenu,
-  onMove,
-  dragOver,
-  setDragOver,
-  draggedPathRef,
+  onDragStart,
+  draggedPath,
+  dragOverPath,
 }: {
   entry: ProjectEntry
   depth?: number
   onContextMenu: (e: React.MouseEvent, entry: ProjectEntry) => void
-  onMove: (src: string, destDir: string) => void
-  dragOver: string | null
-  setDragOver: (path: string | null) => void
-  draggedPathRef: React.MutableRefObject<string | null>
+  onDragStart: (path: string, x: number, y: number) => void
+  draggedPath: string | null
+  dragOverPath: string | null
 }) {
   const [open, setOpen] = useState(depth === 0)
   const { tmpPath, openFile, activeFile } = useAppStore()
@@ -54,39 +52,24 @@ function TreeNode({
   }
 
   const isActive = !entry.isDir && entry.path === activeFile
-  const isDragTarget = entry.isDir && dragOver === entry.path
-  const isBeingDragged = draggedPathRef.current === entry.path
-
-  const folderDropHandlers = entry.isDir ? {
-    onDragOver: (e: React.DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      e.dataTransfer.dropEffect = 'move'
-      setDragOver(entry.path)
-    },
-    onDrop: (e: React.DragEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      const src = e.dataTransfer.getData('text/plain') || draggedPathRef.current
-      if (src) onMove(src, entry.path)
-      setDragOver(null)
-    },
-  } : {}
+  const isDragTarget = entry.isDir && dragOverPath === entry.path
+  const isBeingDragged = draggedPath === entry.path
 
   return (
     <div>
       <div
-        draggable
-        onDragStart={(e) => {
-          draggedPathRef.current = entry.path
-          e.dataTransfer.setData('text/plain', entry.path)
-          e.dataTransfer.effectAllowed = 'move'
+        data-path={entry.path}
+        data-isdir={entry.isDir ? 'true' : 'false'}
+        onPointerDown={(e) => {
+          if (e.button !== 0) return
+          e.stopPropagation()
+          onDragStart(entry.path, e.clientX, e.clientY)
         }}
-        onDragEnd={() => {
-          draggedPathRef.current = null
-          setDragOver(null)
+        onClick={() => {
+          if (entry.isDir) setOpen((o) => !o)
+          else handleFileClick()
         }}
-        {...folderDropHandlers}
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, entry) }}
         className={`flex items-center gap-1.5 py-1 cursor-pointer text-[#a6adc8] text-xs select-none transition-colors ${
           isDragTarget
             ? 'bg-[#45475a] outline outline-1 outline-[#89b4fa]'
@@ -95,8 +78,6 @@ function TreeNode({
               : 'hover:bg-[#313244]/50'
         } ${isBeingDragged ? 'opacity-40' : ''}`}
         style={{ paddingLeft: `${16 + depth * 12}px` }}
-        onClick={() => (entry.isDir ? setOpen((o) => !o) : handleFileClick())}
-        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onContextMenu(e, entry) }}
       >
         {entry.isDir ? (
           open
@@ -119,24 +100,27 @@ function TreeNode({
           entry={child}
           depth={depth + 1}
           onContextMenu={onContextMenu}
-          onMove={onMove}
-          dragOver={dragOver}
-          setDragOver={setDragOver}
-          draggedPathRef={draggedPathRef}
+          onDragStart={onDragStart}
+          draggedPath={draggedPath}
+          dragOverPath={dragOverPath}
         />
       ))}
     </div>
   )
 }
 
+const DRAG_THRESHOLD = 5
+
 export function FileTree() {
   const { projectTree, tmpPath, setProjectTree, renameOpenFile } = useAppStore()
   const [dialog, setDialog] = useState<DialogState>({ type: 'none' })
   const [menu, setMenu] = useState<MenuState>({ type: 'none' })
-  const [dragOver, setDragOver] = useState<string | null>(null)
-  const draggedPathRef = useRef<string | null>(null)
+  const [draggedPath, setDraggedPath] = useState<string | null>(null)
+  const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [externalDrag, setExternalDrag] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
+  const startPosRef = useRef({ x: 0, y: 0 })
+  const didMoveRef = useRef(false)
   const zoomRef = useRef(1)
 
   useEffect(() => {
@@ -177,6 +161,59 @@ export function FileTree() {
 
     return () => unlisteners.forEach((u) => u())
   }, [tmpPath, setProjectTree])
+
+  // Find which folder the pointer is over. Returns '' for root, null for outside tree.
+  function findDropTarget(x: number, y: number): string | null {
+    const el = document.elementFromPoint(x, y)
+    if (!el || !containerRef.current?.contains(el)) return null
+    let node: Element | null = el
+    while (node && node !== containerRef.current) {
+      if (node.getAttribute('data-isdir') === 'true') {
+        return node.getAttribute('data-path') ?? ''
+      }
+      node = node.parentElement
+    }
+    return ''  // inside tree but not on a folder row — treat as root
+  }
+
+  useEffect(() => {
+    if (!draggedPath) return
+
+    function onMove(e: PointerEvent) {
+      const dx = e.clientX - startPosRef.current.x
+      const dy = e.clientY - startPosRef.current.y
+      if (!didMoveRef.current && Math.sqrt(dx * dx + dy * dy) > DRAG_THRESHOLD) {
+        didMoveRef.current = true
+      }
+      if (didMoveRef.current) {
+        setDragOverPath(findDropTarget(e.clientX, e.clientY))
+      }
+    }
+
+    function onUp(e: PointerEvent) {
+      if (didMoveRef.current) {
+        const target = findDropTarget(e.clientX, e.clientY)
+        if (target !== null && draggedPath) {
+          handleMove(draggedPath, target)
+        }
+      }
+      setDraggedPath(null)
+      setDragOverPath(null)
+    }
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    return () => {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+    }
+  }, [draggedPath])
+
+  function handleDragStart(path: string, x: number, y: number) {
+    startPosRef.current = { x, y }
+    didMoveRef.current = false
+    setDraggedPath(path)
+  }
 
   const refreshTree = useCallback(async () => {
     if (!tmpPath) return
@@ -274,18 +311,12 @@ export function FileTree() {
   return (
     <div
       ref={containerRef}
-      className={`relative flex-1 overflow-auto transition-colors ${dragOver === '' ? 'bg-[#313244]/30' : ''}`}
+      data-path=""
+      data-isdir="true"
+      className={`relative flex-1 overflow-auto transition-colors ${
+        draggedPath && dragOverPath === '' ? 'bg-[#313244]/30' : ''
+      } ${draggedPath ? 'select-none' : ''}`}
       onContextMenu={openBackgroundMenu}
-      onDragOver={(e) => { e.preventDefault(); setDragOver('') }}
-      onDragLeave={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOver(null)
-      }}
-      onDrop={(e) => {
-        e.preventDefault()
-        const src = e.dataTransfer.getData('text/plain') || draggedPathRef.current
-        if (src) handleMove(src, '')
-        setDragOver(null)
-      }}
     >
       <div className="px-2 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#585b70]">
         Projet
@@ -296,10 +327,9 @@ export function FileTree() {
           key={entry.path}
           entry={entry}
           onContextMenu={openEntryMenu}
-          onMove={handleMove}
-          dragOver={dragOver}
-          setDragOver={setDragOver}
-          draggedPathRef={draggedPathRef}
+          onDragStart={handleDragStart}
+          draggedPath={draggedPath}
+          dragOverPath={dragOverPath}
         />
       ))}
 
