@@ -39,4 +39,4 @@ typst-ide = "0.13"
 rayon = "1.12.0"
 comemo = "0.4"
 base64 = "0.22"
-git2 = { version = "0.20", features = ["vendored-libgit2"] }
+git2 = { version = "0.20", default-features = false, features = ["vendored-libgit2"] }
