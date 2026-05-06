@@ -92,6 +92,13 @@ export const useAppStore = create<AppState>()(
           ),
           activeFile: s.activeFile === oldPath ? newPath : s.activeFile,
         })),
+      reorderFiles: (fromIndex, toIndex) =>
+        set((s) => {
+          const files = [...s.openFiles]
+          const [moved] = files.splice(fromIndex, 1)
+          files.splice(toIndex, 0, moved)
+          return { openFiles: files }
+        }),
       setPages: (pages) => set({ pages }),
       applyPagesDelta: (pageCount, updates) =>
         set((s) => {

@@ -98,4 +98,5 @@ export interface AppState {
   addRecentProject: (path: string) => void
   removeRecentProject: (path: string) => void
   setPendingJump: (jump: { file: string; byteOffset: number } | null) => void
+  reorderFiles: (fromIndex: number, toIndex: number) => void
 }

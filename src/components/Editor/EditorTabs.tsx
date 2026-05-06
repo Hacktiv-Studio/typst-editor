@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { FaCircle, FaXmark } from 'react-icons/fa6'
 import { useAppStore } from '../../store/appStore'
 import { writeFile } from '../../tauri/commands'
@@ -8,8 +8,10 @@ import { useTranslation } from '../../i18n/useTranslation'
 type MenuState = { path: string; x: number; y: number } | null
 
 export function EditorTabs() {
-  const { openFiles, activeFile, setActiveFile, closeFile, markFileSaved, tmpPath } = useAppStore()
+  const { openFiles, activeFile, setActiveFile, closeFile, markFileSaved, tmpPath, reorderFiles } = useAppStore()
   const [menu, setMenu] = useState<MenuState>(null)
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null)
+  const dragIndexRef = useRef<number | null>(null)
   const { t } = useTranslation()
 
   if (openFiles.length === 0) return (
@@ -43,23 +45,55 @@ export function EditorTabs() {
     ]
   }
 
+  function handleDragStart(e: React.DragEvent, index: number) {
+    dragIndexRef.current = index
+    e.dataTransfer.effectAllowed = 'move'
+  }
+
+  function handleDragOver(e: React.DragEvent, index: number) {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOverIndex(index)
+  }
+
+  function handleDrop(e: React.DragEvent, toIndex: number) {
+    e.preventDefault()
+    const fromIndex = dragIndexRef.current
+    if (fromIndex !== null && fromIndex !== toIndex) {
+      reorderFiles(fromIndex, toIndex)
+    }
+    dragIndexRef.current = null
+    setDragOverIndex(null)
+  }
+
+  function handleDragEnd() {
+    dragIndexRef.current = null
+    setDragOverIndex(null)
+  }
+
   return (
     <>
       <div className="h-[30px] bg-[#181825] border-b border-[#313244] flex items-end overflow-x-auto">
-        {openFiles.map((file) => {
+        {openFiles.map((file, index) => {
           const name = file.path.split('/').pop()
           const isActive = file.path === activeFile
+          const isDragTarget = dragOverIndex === index && dragIndexRef.current !== index
           return (
             <div
               key={file.path}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={handleDragEnd}
               onClick={() => setActiveFile(file.path)}
               onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); closeFile(file.path) } }}
               onContextMenu={(e) => openMenu(e, file.path)}
-              className={`flex items-center gap-1.5 px-3 h-full cursor-pointer text-[10px] border-r border-[#313244] flex-shrink-0 ${
+              className={`flex items-center gap-1.5 px-3 h-full cursor-pointer text-[10px] border-r border-[#313244] flex-shrink-0 transition-colors ${
                 isActive
                   ? 'bg-[#1e1e2e] text-[#cdd6f4] border-t-2 border-t-[#89b4fa]'
                   : 'text-[#585b70] hover:text-[#a6adc8]'
-              }`}
+              } ${isDragTarget ? 'border-l-2 border-l-[#89b4fa]' : ''}`}
             >
               {file.isDirty && <FaCircle size={7} className="text-[#f38ba8]" />}
               <span>{name}</span>
