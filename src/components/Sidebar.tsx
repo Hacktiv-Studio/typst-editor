@@ -482,6 +482,7 @@ export function Sidebar() {
         <Dialog
           title={t('sidebar.unsavedTitle')}
           onClose={() => setPendingSwitch('none')}
+          width="w-[28rem]"
           actions={
             <>
               <button
