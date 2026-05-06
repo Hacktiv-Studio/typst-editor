@@ -1,5 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 interface DialogProps {
   title: string
@@ -11,14 +12,7 @@ interface DialogProps {
 
 export function Dialog({ title, children, actions, onClose, width = 'w-80' }: DialogProps) {
   const overlayRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handleKey)
-    return () => document.removeEventListener('keydown', handleKey)
-  }, [onClose])
+  useEscapeKey(onClose)
 
   return createPortal(
     <div

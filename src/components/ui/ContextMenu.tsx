@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 export interface ContextMenuItem {
   label: string
@@ -25,16 +26,10 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
         onClose()
       }
     }
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
     document.addEventListener('mousedown', handleDown)
-    document.addEventListener('keydown', handleKey)
-    return () => {
-      document.removeEventListener('mousedown', handleDown)
-      document.removeEventListener('keydown', handleKey)
-    }
+    return () => document.removeEventListener('mousedown', handleDown)
   }, [onClose])
+  useEscapeKey(onClose)
 
   const style: React.CSSProperties = {
     position: 'fixed',

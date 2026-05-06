@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FaXmark } from 'react-icons/fa6'
 import { readFileBase64 } from '../../tauri/commands'
+import { useEscapeKey } from '../../hooks/useEscapeKey'
 
 const IMAGE_MIME: Record<string, string> = {
   svg: 'image/svg+xml',
@@ -38,13 +39,7 @@ export function ImagePreviewModal({ tmpPath, relPath, onClose }: Props) {
     })
   }, [tmpPath, relPath, mime])
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', onKey)
-    return () => document.removeEventListener('keydown', onKey)
-  }, [onClose])
+  useEscapeKey(onClose)
 
   return createPortal(
     <div

@@ -11,6 +11,7 @@ import { useAppStore } from "../../store/appStore";
 import { readFile } from "../../tauri/commands";
 import { useTranslation } from "../../i18n/useTranslation";
 import type { ProjectEntry } from "../../types";
+import { useEscapeKey } from "../../hooks/useEscapeKey";
 
 interface Match {
   line: number;
@@ -86,13 +87,7 @@ export function GlobalSearch({ onClose }: Props) {
     inputRef.current?.focus();
   }, []);
 
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  useEscapeKey(onClose)
 
   const doSearch = useCallback(
     async (q: string) => {
