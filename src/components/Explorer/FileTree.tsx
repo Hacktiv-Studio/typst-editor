@@ -14,6 +14,7 @@ import type { ProjectEntry } from '../../types'
 import { InputDialog } from '../ui/InputDialog'
 import { ConfirmDialog } from '../ui/ConfirmDialog'
 import { ContextMenu, type ContextMenuEntry } from '../ui/ContextMenu'
+import { ImagePreviewModal, isImagePath } from '../ui/ImagePreviewModal'
 
 type DialogState =
   | { type: 'none' }
@@ -118,6 +119,7 @@ export function FileTree() {
   const [draggedPath, setDraggedPath] = useState<string | null>(null)
   const [dragOverPath, setDragOverPath] = useState<string | null>(null)
   const [externalDrag, setExternalDrag] = useState(false)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const startPosRef = useRef({ x: 0, y: 0 })
   const didMoveRef = useRef(false)
@@ -301,6 +303,10 @@ export function FileTree() {
   }
 
   function entryMenuItems(entry: ProjectEntry): ContextMenuEntry[] {
+    const previewItems: ContextMenuEntry[] = (!entry.isDir && isImagePath(entry.path)) ? [
+      { label: 'Aperçu', onClick: () => setImagePreview(entry.path) },
+      'separator',
+    ] : []
     const dirItems: ContextMenuEntry[] = entry.isDir ? [
       { label: 'Nouveau fichier', onClick: () => setDialog({ type: 'newFile', parentDir: entry.path }) },
       { label: 'Nouveau dossier', onClick: () => setDialog({ type: 'newFolder', parentDir: entry.path }) },
@@ -310,6 +316,7 @@ export function FileTree() {
       'separator',
     ] : []
     return [
+      ...previewItems,
       ...dirItems,
       { label: 'Renommer', onClick: () => setDialog({ type: 'rename', entry }) },
       'separator',
@@ -397,6 +404,13 @@ export function FileTree() {
           message={`Supprimer "${dialog.entry.name}" ? Cette action est irréversible.`}
           onConfirm={() => handleDelete(dialog.entry)}
           onClose={() => setDialog({ type: 'none' })}
+        />
+      )}
+      {imagePreview && tmpPath && (
+        <ImagePreviewModal
+          tmpPath={tmpPath}
+          relPath={imagePreview}
+          onClose={() => setImagePreview(null)}
         />
       )}
     </div>

@@ -74,6 +74,9 @@ export const deletePath = (tmpPath: string, relPath: string): Promise<void> =>
 export const readFile = (tmpPath: string, relPath: string): Promise<string> =>
   invoke('read_file', { tmpPath, relPath })
 
+export const readFileBase64 = (tmpPath: string, relPath: string): Promise<string> =>
+  invoke('read_file_base64', { tmpPath, relPath })
+
 export const writeFile = (tmpPath: string, relPath: string, content: string): Promise<void> =>
   invoke('write_file', { tmpPath, relPath, content })
 

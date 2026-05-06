@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use base64::Engine;
 use serde::{Deserialize, Serialize};
 use tauri::command;
 
@@ -112,6 +113,13 @@ pub async fn delete_path(tmp_path: String, rel_path: String) -> Result<(), Strin
 pub async fn read_file(tmp_path: String, rel_path: String) -> Result<String, String> {
     let path = safe_join(&data_root(&tmp_path), &rel_path)?;
     tokio::fs::read_to_string(&path).await.map_err(|e| e.to_string())
+}
+
+#[command]
+pub async fn read_file_base64(tmp_path: String, rel_path: String) -> Result<String, String> {
+    let path = safe_join(&data_root(&tmp_path), &rel_path)?;
+    let bytes = tokio::fs::read(&path).await.map_err(|e| e.to_string())?;
+    Ok(base64::engine::general_purpose::STANDARD.encode(bytes))
 }
 
 #[command]
