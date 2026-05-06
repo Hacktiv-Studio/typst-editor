@@ -66,12 +66,12 @@ export function useProjectOps() {
 
   function handleNewProject() {
     if (tmpPath && hasUnsavedContent()) { setPendingSwitch('newProject'); return }
-    doNewProject()
+    doNewProject().catch(() => {})
   }
 
   function handleOpenProject() {
     if (tmpPath && hasUnsavedContent()) { setPendingSwitch('openProject'); return }
-    doOpenProject()
+    doOpenProject().catch(() => {})
   }
 
   function handleOpenFromRecent(path: string) {
@@ -80,7 +80,7 @@ export function useProjectOps() {
       setPendingSwitch('openRecent')
       return
     }
-    doOpenWithPath(path)
+    doOpenWithPath(path).catch(() => {})
   }
 
   async function handleSaveAndSwitch() {
@@ -93,7 +93,7 @@ export function useProjectOps() {
       await saveProject(oldTmp, typzPath)
     } else {
       const outPath = await save({ filters: [{ name: 'Typst Project', extensions: ['typz'] }] })
-      if (!outPath) return
+      if (!outPath) { setPendingSwitch('none'); return }
       setTypzPath(outPath as string)
       addRecentProject(outPath as string)
       await saveProject(oldTmp, outPath as string)
