@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect } from "react";
 import { emitTo, listen } from "@tauri-apps/api/event";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import {
@@ -25,8 +25,6 @@ export function PreviewPanel() {
     toggleThumbnails,
   } = useAppStore();
   const { t } = useTranslation();
-  const popupRef = useRef<WebviewWindow | null>(null);
-
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen("preview-popup-hidden", () => {
@@ -38,24 +36,23 @@ export function PreviewPanel() {
   }, []);
 
   const handlePopout = useCallback(async () => {
-    if (popupRef.current) {
-      await emitTo("preview-popup", "update-popup-tmppath", tmpPath).catch(
-        () => {},
-      );
-      await popupRef.current.show().catch(() => {});
+    const existing = await WebviewWindow.getByLabel("preview-popup");
+    if (existing) {
+      await emitTo("preview-popup", "update-popup-tmppath", tmpPath).catch(() => {});
+      await existing.show().catch(() => {});
+      await existing.setFocus().catch(() => {});
       useAppStore.setState({ previewVisible: false });
       return;
     }
     const url = tmpPath
       ? `preview.html?tmpPath=${encodeURIComponent(tmpPath)}`
       : "preview.html";
-    const popup = new WebviewWindow("preview-popup", {
+    new WebviewWindow("preview-popup", {
       url,
       title: "Aperçu",
       width: 800,
       height: 1000,
     });
-    popupRef.current = popup;
     useAppStore.setState({ previewVisible: false });
   }, [tmpPath]);
 
