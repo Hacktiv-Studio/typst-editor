@@ -238,14 +238,14 @@ export function Sidebar() {
   // ── Render ────────────────────────────────────────────────
 
   return (
-    <div className="w-11 bg-[#181825] flex flex-col items-center py-3 gap-1 border-r border-[#313244] flex-shrink-0 relative z-20">
+    <div className="w-11 bg-[#181825] flex flex-col items-center py-3 gap-1 border-r border-[#313244] flex-shrink-0 relative z-20" ref={menuRef}>
       {/* Logo */}
       <div className="w-7 h-7 bg-[#89b4fa] rounded-md flex items-center justify-center text-[#11111b] font-black text-sm mb-2">
         T
       </div>
 
       {/* ── Groupe 1 : Projet ── */}
-      <div className="flex flex-col gap-1 items-center" ref={menuRef}>
+      <div className="flex flex-col gap-1 items-center">
         {/* Nouveau projet */}
         <button
           title={t('sidebar.newProject')}
