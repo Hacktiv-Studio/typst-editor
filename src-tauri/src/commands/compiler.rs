@@ -143,12 +143,6 @@ impl TypstWorld {
         TypstWorld { root, main_id, library, book, fonts, source_cache, file_cache, live_source }
     }
 
-    /// Convenience constructor for tests (loads its own fonts).
-    pub fn new(root: PathBuf, main_file: &str) -> Self {
-        let cache = FontCache::load();
-        Self::from_cache(root, main_file, cache.book, cache.fonts, cache.library, cache.source_cache, cache.file_cache, None)
-    }
-
     /// Resolve a FileId to an absolute path on disk.
     /// Package IDs are resolved from the Typst package cache.
     /// Local IDs are sandboxed to `self.root`.
