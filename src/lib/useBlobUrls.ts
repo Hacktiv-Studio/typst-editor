@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function useBlobUrls(pages: string[]): string[] {
   const prevSvgs = useRef<string[]>([]);
@@ -49,4 +49,16 @@ export function useBlobUrls(pages: string[]): string[] {
   );
 
   return stableResult.current;
+}
+
+export function useBlobUrl(svg: string | null): string | null {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    if (!svg) { setUrl(null); return }
+    const blob = new Blob([svg], { type: 'image/svg+xml' })
+    const u = URL.createObjectURL(blob)
+    setUrl(u)
+    return () => URL.revokeObjectURL(u)
+  }, [svg])
+  return url
 }

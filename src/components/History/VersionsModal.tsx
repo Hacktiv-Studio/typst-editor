@@ -4,21 +4,10 @@ import { useTranslation } from '../../i18n/useTranslation'
 import { useAppStore } from '../../store/appStore'
 import { listVersions, restoreVersion, renderVersionPreview, invalidateCompileHashes } from '../../tauri/commands'
 import type { VersionInfo } from '../../tauri/commands'
+import { useBlobUrl } from '../../lib/useBlobUrls'
 
 interface Props {
   onClose: () => void
-}
-
-function useBlobUrl(svg: string | null): string | null {
-  const [url, setUrl] = useState<string | null>(null)
-  useEffect(() => {
-    if (!svg) { setUrl(null); return }
-    const blob = new Blob([svg], { type: 'image/svg+xml' })
-    const u = URL.createObjectURL(blob)
-    setUrl(u)
-    return () => URL.revokeObjectURL(u)
-  }, [svg])
-  return url
 }
 
 // ---------------------------------------------------------------------------
