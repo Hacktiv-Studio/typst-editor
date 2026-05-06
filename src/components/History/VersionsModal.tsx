@@ -248,6 +248,7 @@ export function VersionsModal({ onClose }: Props) {
   const [previewing, setPreviewing] = useState<VersionInfo | null>(null)
   const [fullscreen, setFullscreen] = useState(false)
   const [size, setSize] = useState({ w: DEFAULT_W, h: DEFAULT_H })
+  const [resizing, setResizing] = useState(false)
   const sizeRef = useRef(size)
   sizeRef.current = size
 
@@ -259,6 +260,7 @@ export function VersionsModal({ onClose }: Props) {
     if (fullscreen) return
     e.preventDefault()
     e.stopPropagation()
+    setResizing(true)
     const startX = e.clientX
     const startY = e.clientY
     const startW = sizeRef.current.w
@@ -271,6 +273,7 @@ export function VersionsModal({ onClose }: Props) {
       })
     }
     function onUp() {
+      setResizing(false)
       window.removeEventListener('mousemove', onMove)
       window.removeEventListener('mouseup', onUp)
     }
@@ -285,6 +288,8 @@ export function VersionsModal({ onClose }: Props) {
     : { width: size.w, height: size.h }
 
   return (
+    <>
+    {resizing && <div className="fixed inset-0 z-[60] cursor-se-resize" />}
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onClick={handleBackdropClick}
@@ -326,5 +331,6 @@ export function VersionsModal({ onClose }: Props) {
         )}
       </div>
     </div>
+    </>
   )
 }
