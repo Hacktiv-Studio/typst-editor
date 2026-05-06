@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { FaClockRotateLeft, FaXmark, FaRotateLeft, FaEye, FaChevronLeft, FaChevronRight, FaArrowLeft } from 'react-icons/fa6'
+import { useState, useEffect, useRef } from 'react'
+import { FaClockRotateLeft, FaXmark, FaRotateLeft, FaEye, FaChevronLeft, FaChevronRight, FaArrowLeft, FaExpand, FaCompress } from 'react-icons/fa6'
 import { useTranslation } from '../../i18n/useTranslation'
 import { useAppStore } from '../../store/appStore'
 import { listVersions, restoreVersion, renderVersionPreview } from '../../tauri/commands'
@@ -28,11 +28,13 @@ function useBlobUrl(svg: string | null): string | null {
 interface PreviewViewProps {
   tmpPath: string
   version: VersionInfo
+  fullscreen: boolean
+  onToggleFullscreen: () => void
   onBack: () => void
   onRestored: () => void
 }
 
-function PreviewView({ tmpPath, version, onBack, onRestored }: PreviewViewProps) {
+function PreviewView({ tmpPath, version, fullscreen, onToggleFullscreen, onBack, onRestored }: PreviewViewProps) {
   const { t } = useTranslation()
   const [pages, setPages] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -73,7 +75,16 @@ function PreviewView({ tmpPath, version, onBack, onRestored }: PreviewViewProps)
           Retour
         </button>
         <div className="text-[#cdd6f4] text-[13px] font-mono">{version.label}</div>
-        <div className="text-[#585b70] text-[10px] font-mono">{version.id}</div>
+        <div className="flex items-center gap-3">
+          <div className="text-[#585b70] text-[10px] font-mono">{version.id}</div>
+          <button
+            onClick={onToggleFullscreen}
+            className="text-[#585b70] hover:text-[#cdd6f4] transition-colors"
+            title={fullscreen ? 'Réduire' : 'Plein écran'}
+          >
+            {fullscreen ? <FaCompress size={12} /> : <FaExpand size={12} />}
+          </button>
+        </div>
       </div>
 
       {/* Preview area */}
@@ -87,7 +98,7 @@ function PreviewView({ tmpPath, version, onBack, onRestored }: PreviewViewProps)
             <img
               src={svgUrl}
               alt="aperçu"
-              className="w-full max-w-[400px] h-auto shadow-2xl bg-white rounded-sm"
+              className="w-full max-w-[520px] h-auto shadow-2xl bg-white rounded-sm"
             />
             {pages.length > 1 && (
               <div className="flex items-center gap-3 text-[#585b70] text-[11px]">
@@ -151,11 +162,13 @@ function PreviewView({ tmpPath, version, onBack, onRestored }: PreviewViewProps)
 
 interface ListViewProps {
   tmpPath: string
+  fullscreen: boolean
+  onToggleFullscreen: () => void
   onPreview: (v: VersionInfo) => void
   onClose: () => void
 }
 
-function ListView({ tmpPath, onPreview, onClose }: ListViewProps) {
+function ListView({ tmpPath, fullscreen, onToggleFullscreen, onPreview, onClose }: ListViewProps) {
   const { t } = useTranslation()
   const [versions, setVersions] = useState<VersionInfo[]>([])
   const [loading, setLoading] = useState(false)
@@ -176,9 +189,18 @@ function ListView({ tmpPath, onPreview, onClose }: ListViewProps) {
           <FaClockRotateLeft size={11} />
           {t('history.title')}
         </div>
-        <button onClick={onClose} className="text-[#585b70] hover:text-[#cdd6f4] transition-colors">
-          <FaXmark size={14} />
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onToggleFullscreen}
+            className="text-[#585b70] hover:text-[#cdd6f4] transition-colors"
+            title={fullscreen ? 'Réduire' : 'Plein écran'}
+          >
+            {fullscreen ? <FaCompress size={12} /> : <FaExpand size={12} />}
+          </button>
+          <button onClick={onClose} className="text-[#585b70] hover:text-[#cdd6f4] transition-colors">
+            <FaXmark size={14} />
+          </button>
+        </div>
       </div>
 
       {/* Note */}
@@ -216,34 +238,90 @@ function ListView({ tmpPath, onPreview, onClose }: ListViewProps) {
 // Modal root
 // ---------------------------------------------------------------------------
 
+const MIN_W = 380
+const MIN_H = 400
+const DEFAULT_W = 520
+const DEFAULT_H = 600
+
 export function VersionsModal({ onClose }: Props) {
   const { tmpPath } = useAppStore()
   const [previewing, setPreviewing] = useState<VersionInfo | null>(null)
+  const [fullscreen, setFullscreen] = useState(false)
+  const [size, setSize] = useState({ w: DEFAULT_W, h: DEFAULT_H })
+  const sizeRef = useRef(size)
+  sizeRef.current = size
 
   function handleBackdropClick(e: React.MouseEvent) {
     if (e.target === e.currentTarget) onClose()
   }
 
+  function startResize(e: React.MouseEvent) {
+    if (fullscreen) return
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startY = e.clientY
+    const startW = sizeRef.current.w
+    const startH = sizeRef.current.h
+
+    function onMove(ev: MouseEvent) {
+      setSize({
+        w: Math.max(MIN_W, startW + ev.clientX - startX),
+        h: Math.max(MIN_H, startH + ev.clientY - startY),
+      })
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+  }
+
   if (!tmpPath) return null
+
+  const modalStyle = fullscreen
+    ? { width: '100vw', height: '100vh' }
+    : { width: size.w, height: size.h }
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
       onClick={handleBackdropClick}
     >
-      <div className="bg-[#181825] border border-[#313244] rounded-lg shadow-2xl w-[520px] h-[600px] flex flex-col overflow-hidden">
+      <div
+        className={`bg-[#181825] border border-[#313244] shadow-2xl flex flex-col overflow-hidden relative${fullscreen ? '' : ' rounded-lg'}`}
+        style={modalStyle}
+        onClick={e => e.stopPropagation()}
+      >
         {previewing ? (
           <PreviewView
             tmpPath={tmpPath}
             version={previewing}
+            fullscreen={fullscreen}
+            onToggleFullscreen={() => setFullscreen(f => !f)}
             onBack={() => setPreviewing(null)}
             onRestored={() => window.location.reload()}
           />
         ) : (
           <ListView
             tmpPath={tmpPath}
+            fullscreen={fullscreen}
+            onToggleFullscreen={() => setFullscreen(f => !f)}
             onPreview={setPreviewing}
             onClose={onClose}
+          />
+        )}
+
+        {/* Resize handle — bottom-right corner */}
+        {!fullscreen && (
+          <div
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-se-resize"
+            onMouseDown={startResize}
+            style={{
+              background: 'linear-gradient(135deg, transparent 50%, #585b70 50%)',
+              borderBottomRightRadius: 8,
+            }}
           />
         )}
       </div>
