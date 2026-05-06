@@ -113,8 +113,8 @@ export function PagesViewer() {
 
   if (pages.length === 0) {
     return (
-      <div className="flex-1 flex items-center justify-center text-[#585b70] text-sm">
-        Page blanche — écrivez du contenu pour voir l'aperçu
+      <div className="flex-1 overflow-auto bg-[#1a1a2e] flex flex-col items-center py-6 px-4">
+        <div className="w-full max-w-[calc(100%-2rem)] shadow-2xl rounded-sm bg-white" style={{ aspectRatio: '1 / 1.414' }} />
       </div>
     )
   }
