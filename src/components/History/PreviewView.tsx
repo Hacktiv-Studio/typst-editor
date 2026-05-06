@@ -6,7 +6,7 @@ import {
 } from 'react-icons/fa6'
 import { useTranslation } from '../../i18n/useTranslation'
 import { renderVersionPreview, restoreVersion } from '../../tauri/commands'
-import { useBlobUrl } from '../../lib/useBlobUrls'
+import { useBlobUrls } from '../../lib/useBlobUrls'
 import type { VersionInfo } from '../../tauri/commands'
 
 interface Props {
@@ -25,7 +25,8 @@ export function PreviewView({ tmpPath, version, fullscreen, onToggleFullscreen, 
   const [page, setPage] = useState(0)
   const [confirming, setConfirming] = useState(false)
   const [restoring, setRestoring] = useState(false)
-  const svgUrl = useBlobUrl(pages[page] ?? null)
+  const svgUrls = useBlobUrls(pages)
+  const svgUrl = svgUrls[page] ?? null
 
   useEffect(() => {
     setLoading(true)

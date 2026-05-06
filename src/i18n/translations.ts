@@ -102,6 +102,7 @@ export const fr = {
   // Historique des versions
   "history.title": "Historique",
   "history.noVersions": "Aucune version sauvegardée",
+  "history.loadError": "Erreur lors du chargement",
   "history.create": "Créer une version",
   "history.restore": "Restaurer",
   "history.restoreConfirm": "Restaurer cette version ?",
@@ -226,6 +227,7 @@ export const en: Record<TranslationKey, string> = {
   // Version history
   "history.title": "History",
   "history.noVersions": "No saved versions",
+  "history.loadError": "Failed to load versions",
   "history.create": "Create a version",
   "history.restore": "Restore",
   "history.restoreConfirm": "Restore this version?",

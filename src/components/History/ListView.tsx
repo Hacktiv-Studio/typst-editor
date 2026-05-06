@@ -17,12 +17,14 @@ export function ListView({ tmpPath, fullscreen, onToggleFullscreen, onPreview, o
   const { t } = useTranslation()
   const [versions, setVersions] = useState<VersionInfo[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(false)
 
   useEffect(() => {
     setLoading(true)
+    setError(false)
     listVersions(tmpPath)
       .then(setVersions)
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [tmpPath])
 
@@ -57,6 +59,8 @@ export function ListView({ tmpPath, fullscreen, onToggleFullscreen, onPreview, o
       <div className="flex-1 overflow-y-auto">
         {loading ? (
           <div className="px-4 py-6 text-sm text-[#585b70] text-center">{t('history.loading')}</div>
+        ) : error ? (
+          <div className="px-4 py-6 text-sm text-[#f38ba8] text-center">{t('history.loadError')}</div>
         ) : versions.length === 0 ? (
           <div className="px-4 py-6 text-sm text-[#585b70] text-center">{t('history.noVersions')}</div>
         ) : (
