@@ -1,260 +1,51 @@
-import { useState, useRef, useEffect } from "react";
+// src/components/Sidebar.tsx
+import { useState, useRef, useEffect } from 'react'
 import {
-  FaFolderPlus,
-  FaFolderOpen,
-  FaFileExport,
-  FaFilePdf,
-  FaFileImage,
-  FaVectorSquare,
-  FaTerminal,
-  FaTableColumns,
-  FaEye,
-  FaFloppyDisk,
-  FaArrowsDownToLine,
-  FaMagnifyingGlass,
-  FaXmark,
-  FaCircleQuestion,
-  FaPowerOff,
-  FaClockRotateLeft,
-  FaGear,
+  FaFolderPlus, FaFolderOpen, FaFileExport,
+  FaFilePdf, FaFileImage, FaVectorSquare,
+  FaTerminal, FaTableColumns, FaEye,
+  FaFloppyDisk, FaArrowsDownToLine, FaMagnifyingGlass,
+  FaXmark, FaCircleQuestion, FaPowerOff,
+  FaClockRotateLeft, FaGear,
 } from 'react-icons/fa6'
-import { openUrl } from "@tauri-apps/plugin-opener";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { useAppStore } from "../store/appStore";
-import {
-  newProject,
-  openProject,
-  exportProject,
-  readFile,
-  saveProject,
-  writeFile,
-  cleanupTmp,
-  createVersion,
-} from "../tauri/commands";
-import { open, save } from "@tauri-apps/plugin-dialog";
-import { Dialog } from "./ui/Dialog";
-import { useTranslation } from "../i18n/useTranslation";
-
-type PendingSwitch = "none" | "newProject" | "openProject" | "openRecent";
+import { openUrl } from '@tauri-apps/plugin-opener'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { useAppStore } from '../store/appStore'
+import { Dialog } from './ui/Dialog'
+import { useTranslation } from '../i18n/useTranslation'
+import { useProjectOps } from '../hooks/useProjectOps'
+import { useSaveExport } from '../hooks/useSaveExport'
 
 export function Sidebar() {
-  const [exportOpen, setExportOpen] = useState(false);
-  const [recentOpen, setRecentOpen] = useState(false);
-  const [saveOpen, setSaveOpen] = useState(false);
-  const [pendingSwitch, setPendingSwitch] = useState<PendingSwitch>("none");
-  const [pendingRecentPath, setPendingRecentPath] = useState<string | null>(
-    null,
-  );
-  const menuRef = useRef<HTMLDivElement>(null);
+  const [exportOpen, setExportOpen] = useState(false)
+  const [recentOpen, setRecentOpen] = useState(false)
+  const [saveOpen, setSaveOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+
   const {
-    tmpPath,
-    entryFile,
-    toggleDiagnostics,
-    setProject,
-    diagnosticsVisible,
-    openFile,
-    toggleExplorer,
-    explorerVisible,
-    togglePreview,
-    previewVisible,
-    typzPath,
-    setTypzPath,
-    openFiles,
-    activeFile,
-    markFileSaved,
-    recentProjects,
-    addRecentProject,
-    removeRecentProject,
-    toggleSearch,
-    searchVisible,
-    openVersionsModal,
-    openSettingsModal,
-  } = useAppStore();
-  const { t } = useTranslation();
+    tmpPath, explorerVisible, previewVisible, diagnosticsVisible, searchVisible,
+    recentProjects, removeRecentProject,
+    toggleExplorer, togglePreview, toggleDiagnostics, toggleSearch,
+    openVersionsModal, openSettingsModal,
+  } = useAppStore()
+
+  const { t } = useTranslation()
+  const {
+    pendingSwitch, setPendingSwitch,
+    handleNewProject, handleOpenProject, handleOpenFromRecent,
+    handleSaveAndSwitch, handleDiscardAndSwitch,
+  } = useProjectOps()
+  const { handleSave, handleSaveAs, handleExport } = useSaveExport()
 
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setExportOpen(false);
-        setRecentOpen(false);
-        setSaveOpen(false);
+        setExportOpen(false); setRecentOpen(false); setSaveOpen(false)
       }
     }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
-  // ── New / open with guard ──────────────────────────────────
-
-  function hasUnsavedContent() {
-    return openFiles.some(f => f.isDirty || f.content.trim() !== '')
-  }
-
-  async function handleNewProject() {
-    if (tmpPath && hasUnsavedContent()) {
-      setPendingSwitch("newProject");
-      return;
-    }
-    await doNewProject();
-  }
-
-  async function handleOpenProject() {
-    if (tmpPath && hasUnsavedContent()) {
-      setPendingSwitch("openProject");
-      return;
-    }
-    await doOpenProject();
-  }
-
-  function handleOpenFromRecent(path: string) {
-    setRecentOpen(false);
-    if (tmpPath && hasUnsavedContent()) {
-      setPendingRecentPath(path);
-      setPendingSwitch("openRecent");
-      return;
-    }
-    doOpenWithPath(path);
-  }
-
-  // ── Actual project actions ────────────────────────────────
-
-  async function doNewProject() {
-    const name = `projet-${Date.now()}`;
-    const info = await newProject(name);
-    setProject(info.tmpPath, null, "main.typ", info.tree);
-    const content = await readFile(info.tmpPath, "main.typ");
-    openFile({ path: "main.typ", content, isDirty: false });
-  }
-
-  async function doOpenProject() {
-    const selected = await open({
-      filters: [{ name: "Typst Project", extensions: ["typz"] }],
-    });
-    if (!selected) return;
-    const info = await openProject(selected as string);
-    setProject(info.tmpPath, selected as string, "main.typ", info.tree);
-    addRecentProject(selected as string);
-    const content = await readFile(info.tmpPath, "main.typ").catch(() => "");
-    if (content !== null) openFile({ path: "main.typ", content, isDirty: false });
-  }
-
-  async function doOpenWithPath(path: string) {
-    try {
-      const info = await openProject(path);
-      setProject(info.tmpPath, path, "main.typ", info.tree);
-      addRecentProject(path);
-      const content = await readFile(info.tmpPath, "main.typ").catch(() => "");
-      if (content !== null)
-        openFile({ path: "main.typ", content, isDirty: false });
-    } catch {
-      removeRecentProject(path);
-    }
-  }
-
-  async function doSwitch(which: PendingSwitch) {
-    setPendingSwitch("none");
-    if (which === "newProject") await doNewProject();
-    else if (which === "openProject") await doOpenProject();
-    else if (which === "openRecent" && pendingRecentPath) {
-      const path = pendingRecentPath;
-      setPendingRecentPath(null);
-      await doOpenWithPath(path);
-    }
-  }
-
-  // ── Save-before-switch handlers ───────────────────────────
-
-  async function handleSaveAndSwitch() {
-    if (!tmpPath) return;
-    const oldTmp = tmpPath;
-    const which = pendingSwitch;
-
-    if (typzPath) {
-      const file = openFiles.find((f) => f.path === activeFile);
-      if (file) {
-        await writeFile(oldTmp, file.path, file.content);
-        markFileSaved(file.path);
-      }
-      await saveProject(oldTmp, typzPath);
-    } else {
-      const outPath = await save({
-        filters: [{ name: "Typst Project", extensions: ["typz"] }],
-      });
-      if (!outPath) return;
-      setTypzPath(outPath as string);
-      addRecentProject(outPath as string);
-      await saveProject(oldTmp, outPath as string);
-    }
-
-    await cleanupTmp(oldTmp);
-    await doSwitch(which);
-  }
-
-  async function handleDiscardAndSwitch() {
-    if (!tmpPath) return;
-    const oldTmp = tmpPath;
-    const which = pendingSwitch;
-    await cleanupTmp(oldTmp);
-    await doSwitch(which);
-  }
-
-  // ── Export / Save ─────────────────────────────────────────
-
-  async function handleExport(format: "pdf" | "png" | "svg") {
-    if (!tmpPath) return;
-    setExportOpen(false);
-    const stem = typzPath
-      ? typzPath.replace(/\\/g, "/").split("/").pop()!.replace(/\.typz$/i, "")
-      : entryFile.replace(/\.typ$/i, "");
-    const defaultPath = `${stem}.${format}`;
-    const outPath = await save({
-      defaultPath,
-      filters: [{ name: format.toUpperCase(), extensions: [format] }],
-    });
-    if (!outPath) return;
-    await exportProject(tmpPath, entryFile, format, outPath as string);
-  }
-
-  function currentStem(): string {
-    if (typzPath) return typzPath.replace(/\\/g, "/").split("/").pop()!.replace(/\.typz$/i, "");
-    return entryFile.replace(/\.typ$/i, "");
-  }
-
-  async function handleSave() {
-    if (!tmpPath) return;
-    if (typzPath) {
-      const file = openFiles.find((f) => f.path === activeFile);
-      if (file) {
-        await writeFile(tmpPath, file.path, file.content);
-        markFileSaved(file.path);
-      }
-      await saveProject(tmpPath, typzPath);
-      createVersion(tmpPath).catch(() => {});
-    } else {
-      const outPath = await save({
-        defaultPath: `${currentStem()}.typz`,
-        filters: [{ name: "Typst Project", extensions: ["typz"] }],
-      });
-      if (!outPath) return;
-      setTypzPath(outPath as string);
-      addRecentProject(outPath as string);
-      await saveProject(tmpPath, outPath as string);
-    }
-  }
-
-  async function handleSaveAs() {
-    if (!tmpPath) return;
-    const outPath = await save({
-      defaultPath: `${currentStem()} (copie).typz`,
-      filters: [{ name: "Typst Project", extensions: ["typz"] }],
-    });
-    if (!outPath) return;
-    setTypzPath(outPath as string);
-    addRecentProject(outPath as string);
-    await saveProject(tmpPath, outPath as string);
-  }
-
-  // ── Render ────────────────────────────────────────────────
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   return (
     <div className="w-11 bg-[#181825] flex flex-col items-center py-3 gap-1 border-r border-[#313244] flex-shrink-0 relative z-20" ref={menuRef}>
@@ -278,7 +69,7 @@ export function Sidebar() {
         <div className="relative">
           <button
             title={t('sidebar.openProject')}
-            onClick={() => { setSaveOpen(false); setExportOpen(false); setRecentOpen((o) => !o) }}
+            onClick={() => { setSaveOpen(false); setExportOpen(false); setRecentOpen(o => !o) }}
             className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors relative"
           >
             <FaFolderOpen size={15} />
@@ -302,7 +93,7 @@ export function Sidebar() {
                       <div
                         key={path}
                         className="flex items-center gap-2 px-3 py-2 hover:bg-[#45475a] transition-colors group cursor-pointer border-b border-[#45475a]/40"
-                        onClick={() => handleOpenFromRecent(path)}
+                        onClick={() => { setRecentOpen(false); handleOpenFromRecent(path) }}
                       >
                         <div className="flex-1 min-w-0">
                           <div className="text-[#cdd6f4] text-[11px] font-medium truncate">{name}</div>
@@ -338,7 +129,7 @@ export function Sidebar() {
           <button
             title={t('sidebar.saveMenu')}
             disabled={!tmpPath}
-            onClick={() => { setRecentOpen(false); setExportOpen(false); setSaveOpen((o) => !o) }}
+            onClick={() => { setRecentOpen(false); setExportOpen(false); setSaveOpen(o => !o) }}
             className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#585b70] relative"
           >
             <FaFloppyDisk size={14} />
@@ -383,7 +174,7 @@ export function Sidebar() {
           <button
             title={t('sidebar.export')}
             disabled={!tmpPath}
-            onClick={() => { setRecentOpen(false); setSaveOpen(false); setExportOpen((o) => !o) }}
+            onClick={() => { setRecentOpen(false); setSaveOpen(false); setExportOpen(o => !o) }}
             className="w-8 h-8 flex items-center justify-center bg-[#89b4fa] text-[#11111b] rounded-md hover:bg-[#74c7ec] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#89b4fa] relative"
           >
             <FaFileExport size={15} />
@@ -402,7 +193,7 @@ export function Sidebar() {
               ].map(({ format, icon, label, desc, color, bg }) => (
                 <button
                   key={format}
-                  onClick={() => handleExport(format)}
+                  onClick={() => { setExportOpen(false); handleExport(format) }}
                   className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-[#45475a] transition-colors text-left"
                 >
                   <div className={`w-7 h-7 rounded-md ${bg} ${color} flex items-center justify-center text-sm flex-shrink-0`}>
@@ -474,8 +265,6 @@ export function Sidebar() {
         >
           <FaClockRotateLeft size={13} />
         </button>
-
-        {/* Paramètres */}
         <button
           title={t('sidebar.settings')}
           onClick={openSettingsModal}
@@ -483,8 +272,6 @@ export function Sidebar() {
         >
           <FaGear size={13} />
         </button>
-
-        {/* Aide */}
         <button
           title={t('sidebar.help')}
           onClick={() => openUrl('https://typst.app/docs/')}
@@ -492,8 +279,6 @@ export function Sidebar() {
         >
           <FaCircleQuestion size={13} />
         </button>
-
-        {/* Fermer */}
         <button
           title={t('sidebar.quit')}
           onClick={() => getCurrentWindow().close()}
