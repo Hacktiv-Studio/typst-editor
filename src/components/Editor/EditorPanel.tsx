@@ -143,7 +143,7 @@ export function EditorPanel() {
           updates: result.pageUpdates.length,
           errors: result.errors.length,
         })}`);
-        applyPagesDelta(result.pageCount, result.pageUpdates);
+        applyPagesDelta(result.pageCount, result.pageUpdates, result.errors.length > 0);
         setSourceMap(result.sourceMap);
         if (result.output) appendOutput(result.output);
         if (result.pageCount > 0) {

@@ -75,7 +75,7 @@ export interface AppState {
   markFileSaved: (path: string) => void
   renameOpenFile: (oldPath: string, newPath: string) => void
   setPages: (pages: string[]) => void
-  applyPagesDelta: (pageCount: number, updates: { index: number; svg: string }[]) => void
+  applyPagesDelta: (pageCount: number, updates: { index: number; svg: string }[], hasErrors?: boolean) => void
   setSourceMap: (map: Record<string, (number | null)[]>) => void
   setActivePage: (page: number) => void
   setZoom: (zoom: number) => void

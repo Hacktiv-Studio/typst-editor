@@ -304,5 +304,8 @@ pub async fn invalidate_compile_hashes(
     font_cache.source_cache.lock().unwrap().clear();
     // Evict all comemo memoization entries
     comemo::evict(0);
+    // Delete preview cache file so the frontend doesn't display stale pages
+    let cache_path = PathBuf::from(&tmp_path).join("cache").join("preview.json");
+    let _ = std::fs::remove_file(cache_path);
     Ok(())
 }

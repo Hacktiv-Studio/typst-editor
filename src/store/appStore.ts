@@ -101,10 +101,10 @@ export const useAppStore = create<AppState>()(
           return { openFiles: files }
         }),
       setPages: (pages) => set({ pages }),
-      applyPagesDelta: (pageCount, updates) =>
+      applyPagesDelta: (pageCount, updates, hasErrors = false) =>
         set((s) => {
-          if (pageCount === 0 && updates.length === 0) return s; // compile error: keep current pages
-          if (updates.length === 0) return s; // nothing changed
+          if (pageCount === 0 && updates.length === 0 && hasErrors) return s; // compile error: keep current pages
+          if (updates.length === 0 && pageCount === s.pages.length) return s; // nothing changed
           const pages =
             pageCount !== s.pages.length
               ? Array(pageCount).fill("")
