@@ -54,6 +54,7 @@ export interface AppState {
   language: 'fr' | 'en'
   explorerVisible: boolean
   previewVisible: boolean
+  previewPoppedOut: boolean
   diagnosticsVisible: boolean
   searchVisible: boolean
   versionsModalOpen: boolean

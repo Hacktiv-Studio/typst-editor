@@ -33,6 +33,7 @@ export const useAppStore = create<AppState>()(
       projectTree: [],
       explorerVisible: true,
       previewVisible: true,
+      previewPoppedOut: false,
       diagnosticsVisible: false,
       searchVisible: false,
       versionsModalOpen: false,

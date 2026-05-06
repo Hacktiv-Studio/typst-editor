@@ -32,17 +32,18 @@ export function PreviewPanel() {
       await emitTo("preview-popup", "update-popup-tmppath", tmpPath).catch(() => {});
       await existing.show().catch(() => {});
       await existing.setFocus().catch(() => {});
-      return;
+    } else {
+      const url = tmpPath
+        ? `preview.html?tmpPath=${encodeURIComponent(tmpPath)}`
+        : "preview.html";
+      new WebviewWindow("preview-popup", {
+        url,
+        title: "Aperçu",
+        width: 800,
+        height: 1000,
+      });
     }
-    const url = tmpPath
-      ? `preview.html?tmpPath=${encodeURIComponent(tmpPath)}`
-      : "preview.html";
-    new WebviewWindow("preview-popup", {
-      url,
-      title: "Aperçu",
-      width: 800,
-      height: 1000,
-    });
+    useAppStore.setState({ previewPoppedOut: true });
   }, [tmpPath]);
 
   if (!previewVisible) return null;

@@ -1,6 +1,6 @@
-import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultLayout } from 'react-resizable-panels'
+import { Group as PanelGroup, Panel, Separator as PanelResizeHandle, useDefaultLayout, usePanelRef } from 'react-resizable-panels'
 import { useEffect } from 'react'
-import { emit } from '@tauri-apps/api/event'
+import { emit, listen } from '@tauri-apps/api/event'
 import { Sidebar } from './components/Sidebar'
 import { Explorer } from './components/Explorer/Explorer'
 import { EditorPanel } from './components/Editor/EditorPanel'
@@ -14,7 +14,8 @@ import { useAppStore } from './store/appStore'
 import { listProject, onProgress, readFile } from './tauri/commands'
 
 export default function App() {
-  const { explorerVisible, previewVisible, diagnosticsVisible, searchVisible, toggleSearch, versionsModalOpen, closeVersionsModal, settingsModalOpen, closeSettingsModal, setProgress, activePage } = useAppStore()
+  const { explorerVisible, previewVisible, previewPoppedOut, diagnosticsVisible, searchVisible, toggleSearch, versionsModalOpen, closeVersionsModal, settingsModalOpen, closeSettingsModal, setProgress, activePage } = useAppStore()
+  const previewPanelRef = usePanelRef()
 
   const horizontalLayout = useDefaultLayout({
     id: 'h-panels',
@@ -69,6 +70,21 @@ export default function App() {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined
+    listen('preview-popup-hidden', () => {
+      useAppStore.setState({ previewPoppedOut: false })
+    }).then((fn) => { unlisten = fn })
+    return () => unlisten?.()
+  }, [])
+
+  useEffect(() => {
+    const panel = previewPanelRef.current
+    if (!panel) return
+    if (previewPoppedOut) panel.collapse()
+    else panel.expand()
+  }, [previewPoppedOut, previewPanelRef])
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
     import('@tauri-apps/api/event').then(({ listen }) => {
       listen<string>('open-typz', async (e) => {
         const { openProject, readFile } = await import('./tauri/commands')
@@ -114,10 +130,10 @@ export default function App() {
               </Panel>
 
               {previewVisible && (
-                <PanelResizeHandle className="w-[5px] bg-[#313244] hover:bg-[#89b4fa] transition-colors" />
+                <PanelResizeHandle className={previewPoppedOut ? 'hidden' : 'w-[5px] bg-[#313244] hover:bg-[#89b4fa] transition-colors'} />
               )}
               {previewVisible && (
-                <Panel id="preview" defaultSize={35} minSize="100px">
+                <Panel id="preview" defaultSize={35} minSize="100px" collapsible panelRef={previewPanelRef}>
                   <PreviewPanel />
                 </Panel>
               )}
