@@ -263,7 +263,7 @@ export function Sidebar() {
         <div className="relative">
           <button
             title={t('sidebar.openProject')}
-            onClick={() => { setSaveOpen(false); setRecentOpen((o) => !o) }}
+            onClick={() => { setSaveOpen(false); setExportOpen(false); setRecentOpen((o) => !o) }}
             className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors relative"
           >
             <FaFolderOpen size={15} />
@@ -323,7 +323,7 @@ export function Sidebar() {
           <button
             title={t('sidebar.saveMenu')}
             disabled={!tmpPath}
-            onClick={() => { setRecentOpen(false); setSaveOpen((o) => !o) }}
+            onClick={() => { setRecentOpen(false); setExportOpen(false); setSaveOpen((o) => !o) }}
             className="w-8 h-8 flex items-center justify-center text-[#585b70] hover:text-[#cdd6f4] hover:bg-[#313244] rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-[#585b70] relative"
           >
             <FaFloppyDisk size={14} />
@@ -359,6 +359,46 @@ export function Sidebar() {
                   <div className="text-[#585b70] text-[9px]">Ctrl+Shift+S</div>
                 </div>
               </button>
+            </div>
+          )}
+        </div>
+
+        {/* Export */}
+        <div className="relative">
+          <button
+            title={t('sidebar.export')}
+            disabled={!tmpPath}
+            onClick={() => { setRecentOpen(false); setSaveOpen(false); setExportOpen((o) => !o) }}
+            className="w-8 h-8 flex items-center justify-center bg-[#89b4fa] text-[#11111b] rounded-md hover:bg-[#74c7ec] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#89b4fa] relative"
+          >
+            <FaFileExport size={15} />
+            <span className="absolute bottom-1 right-1 w-1 h-1 rounded-full bg-[#11111b] opacity-50" />
+          </button>
+
+          {exportOpen && (
+            <div className="absolute left-10 top-0 bg-[#313244] border border-[#45475a] rounded-lg w-44 shadow-xl overflow-hidden z-50">
+              <div className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-[#585b70] border-b border-[#45475a]">
+                {t('sidebar.exportTitle')}
+              </div>
+              {[
+                { format: 'pdf' as const, icon: <FaFilePdf />, label: 'PDF', desc: t('sidebar.exportPdfDesc'), color: 'text-[#f38ba8]', bg: 'bg-[#f38ba820]' },
+                { format: 'png' as const, icon: <FaFileImage />, label: 'PNG', desc: t('sidebar.exportPngDesc'), color: 'text-[#a6e3a1]', bg: 'bg-[#a6e3a120]' },
+                { format: 'svg' as const, icon: <FaVectorSquare />, label: 'SVG', desc: t('sidebar.exportSvgDesc'), color: 'text-[#89b4fa]', bg: 'bg-[#89b4fa20]' },
+              ].map(({ format, icon, label, desc, color, bg }) => (
+                <button
+                  key={format}
+                  onClick={() => handleExport(format)}
+                  className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-[#45475a] transition-colors text-left"
+                >
+                  <div className={`w-7 h-7 rounded-md ${bg} ${color} flex items-center justify-center text-sm flex-shrink-0`}>
+                    {icon}
+                  </div>
+                  <div>
+                    <div className="text-[#cdd6f4] font-semibold text-[11px]">{label}</div>
+                    <div className="text-[#585b70] text-[9px]">{desc}</div>
+                  </div>
+                </button>
+              ))}
             </div>
           )}
         </div>
@@ -419,48 +459,6 @@ export function Sidebar() {
         >
           <FaClockRotateLeft size={13} />
         </button>
-
-        {/* Export */}
-        <div className="relative">
-          <button
-            title={t('sidebar.export')}
-            disabled={!tmpPath}
-            onClick={() => setExportOpen((o) => !o)}
-            className="w-8 h-8 flex items-center justify-center bg-[#89b4fa] text-[#11111b] rounded-md hover:bg-[#74c7ec] transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-[#89b4fa] relative"
-          >
-            <FaFileExport size={15} />
-            <span className="absolute bottom-1 right-1 w-1 h-1 rounded-full bg-[#11111b] opacity-50" />
-          </button>
-
-          {exportOpen && (
-            <div className="absolute left-10 bottom-0 bg-[#313244] border border-[#45475a] rounded-lg w-44 shadow-xl overflow-hidden z-50">
-              <div className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-widest text-[#585b70] border-b border-[#45475a]">
-                {t('sidebar.exportTitle')}
-              </div>
-              {[
-                { format: 'pdf' as const, icon: <FaFilePdf />, label: 'PDF', desc: t('sidebar.exportPdfDesc'), color: 'text-[#f38ba8]', bg: 'bg-[#f38ba820]' },
-                { format: 'png' as const, icon: <FaFileImage />, label: 'PNG', desc: t('sidebar.exportPngDesc'), color: 'text-[#a6e3a1]', bg: 'bg-[#a6e3a120]' },
-                { format: 'svg' as const, icon: <FaVectorSquare />, label: 'SVG', desc: t('sidebar.exportSvgDesc'), color: 'text-[#89b4fa]', bg: 'bg-[#89b4fa20]' },
-              ].map(({ format, icon, label, desc, color, bg }) => (
-                <button
-                  key={format}
-                  onClick={() => handleExport(format)}
-                  className="w-full px-3 py-2 flex items-center gap-2.5 hover:bg-[#45475a] transition-colors text-left"
-                >
-                  <div className={`w-7 h-7 rounded-md ${bg} ${color} flex items-center justify-center text-sm flex-shrink-0`}>
-                    {icon}
-                  </div>
-                  <div>
-                    <div className="text-[#cdd6f4] font-semibold text-[11px]">{label}</div>
-                    <div className="text-[#585b70] text-[9px]">{desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="h-px bg-[#313244] w-6 mx-auto my-1" />
 
         {/* Paramètres */}
         <button
