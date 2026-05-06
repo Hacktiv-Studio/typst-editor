@@ -84,8 +84,12 @@ export function Sidebar() {
 
   // ── New / open with guard ──────────────────────────────────
 
+  function hasUnsavedContent() {
+    return openFiles.some(f => f.isDirty || f.content.trim() !== '')
+  }
+
   async function handleNewProject() {
-    if (tmpPath) {
+    if (tmpPath && hasUnsavedContent()) {
       setPendingSwitch("newProject");
       return;
     }
@@ -93,7 +97,7 @@ export function Sidebar() {
   }
 
   async function handleOpenProject() {
-    if (tmpPath) {
+    if (tmpPath && hasUnsavedContent()) {
       setPendingSwitch("openProject");
       return;
     }
@@ -102,7 +106,7 @@ export function Sidebar() {
 
   function handleOpenFromRecent(path: string) {
     setRecentOpen(false);
-    if (tmpPath) {
+    if (tmpPath && hasUnsavedContent()) {
       setPendingRecentPath(path);
       setPendingSwitch("openRecent");
       return;
