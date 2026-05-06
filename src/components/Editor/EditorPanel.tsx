@@ -37,6 +37,7 @@ export function EditorPanel() {
   )
 
   // Load cache + initial compile when project changes
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     scrollPositionsRef.current = {}
     if (!tmpPath) return

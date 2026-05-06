@@ -30,6 +30,7 @@ export function useCompilation(
   const activePageRef = useRef(activePage)
   const activeFileRef = useRef(activeFile)
   const compileErrorsRef = useRef(compileErrors)
+  const applyErrorsRef = useRef(applyErrors)
   const jumpedAtRef = useRef(0)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const compileGenRef = useRef(0)
@@ -38,6 +39,7 @@ export function useCompilation(
   useEffect(() => { activePageRef.current = activePage }, [activePage])
   useEffect(() => { activeFileRef.current = activeFile }, [activeFile])
   useEffect(() => { compileErrorsRef.current = compileErrors }, [compileErrors])
+  useEffect(() => { applyErrorsRef.current = applyErrors }, [applyErrors])
 
   const runCompile = useCallback(async (liveFile?: string | null, liveContent?: string | null) => {
     if (!tmpPath) return
@@ -59,7 +61,7 @@ export function useCompilation(
         ? result.errors.filter(e => !e.file || e.file === cf || e.file === '<unknown>')
         : []
       setCompileErrors(result.errors)
-      applyErrors?.(fileErrors)
+      applyErrorsRef.current?.(fileErrors)
       startTransition(() => {
         appendOutput(`[${ts()}] ${t('output.compileReceived', { ms: elapsed })}`)
         appendOutput(`[${ts()}] ${t('output.compileSuccess', { pages: result.pageCount, updates: result.pageUpdates.length, errors: result.errors.length })}`)
