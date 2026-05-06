@@ -1,7 +1,7 @@
 use std::path::PathBuf;
-use std::process::Command;
 
 use chrono::{Datelike, Local, Timelike};
+use git2::{IndexAddOption, Repository, ResetType, Signature, Sort};
 use serde::{Deserialize, Serialize};
 use tauri::command;
 
@@ -25,20 +25,11 @@ fn data_dir(tmp_path: &str) -> PathBuf {
     PathBuf::from(tmp_path).join("data")
 }
 
-fn git(data: &PathBuf, args: &[&str]) -> Result<String, String> {
-    let output = Command::new("git")
-        .args(args)
-        .current_dir(data)
-        .env("GIT_AUTHOR_NAME", "typst-editor")
-        .env("GIT_AUTHOR_EMAIL", "typst-editor@local")
-        .env("GIT_COMMITTER_NAME", "typst-editor")
-        .env("GIT_COMMITTER_EMAIL", "typst-editor@local")
-        .output()
-        .map_err(|e| format!("git not found: {e}"))?;
-    if output.status.success() {
-        Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+fn open_or_init(data: &PathBuf) -> Result<Repository, String> {
+    if data.join(".git").exists() {
+        Repository::open(data).map_err(|e| e.to_string())
     } else {
-        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+        Repository::init(data).map_err(|e| e.to_string())
     }
 }
 
@@ -55,6 +46,70 @@ fn now_label() -> String {
     )
 }
 
+fn stage_all(repo: &Repository) -> Result<(), String> {
+    let mut index = repo.index().map_err(|e| e.to_string())?;
+    // Stage new + modified files
+    index
+        .add_all(["*"].iter(), IndexAddOption::DEFAULT, None)
+        .map_err(|e| e.to_string())?;
+    // Stage deletions
+    index
+        .update_all(["*"].iter(), None)
+        .map_err(|e| e.to_string())?;
+    index.write().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn has_staged_changes(repo: &Repository) -> Result<bool, String> {
+    let mut index = repo.index().map_err(|e| e.to_string())?;
+    let tree_id = index.write_tree().map_err(|e| e.to_string())?;
+
+    match repo.head() {
+        Err(_) => {
+            // No commits yet — check if the tree has entries
+            let tree = repo.find_tree(tree_id).map_err(|e| e.to_string())?;
+            Ok(tree.len() > 0)
+        }
+        Ok(head) => {
+            let head_tree = head.peel_to_tree().map_err(|e| e.to_string())?;
+            let diff = repo
+                .diff_tree_to_index(Some(&head_tree), Some(&index), None)
+                .map_err(|e| e.to_string())?;
+            Ok(diff.deltas().count() > 0)
+        }
+    }
+}
+
+fn commit(repo: &Repository, label: &str) -> Result<(), String> {
+    let sig = Signature::now("typst-editor", "typst-editor@local")
+        .map_err(|e| e.to_string())?;
+    let mut index = repo.index().map_err(|e| e.to_string())?;
+    let tree_id = index.write_tree().map_err(|e| e.to_string())?;
+    let tree = repo.find_tree(tree_id).map_err(|e| e.to_string())?;
+
+    match repo.head() {
+        Err(_) => {
+            // First commit — no parent
+            repo.commit(Some("HEAD"), &sig, &sig, label, &tree, &[])
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(head) => {
+            let parent = head.peel_to_commit().map_err(|e| e.to_string())?;
+            repo.commit(Some("HEAD"), &sig, &sig, label, &tree, &[&parent])
+                .map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn head_info(repo: &Repository) -> Result<VersionInfo, String> {
+    let head = repo.head().map_err(|e| e.to_string())?;
+    let commit = head.peel_to_commit().map_err(|e| e.to_string())?;
+    let id = commit.id().to_string()[..7].to_string();
+    let label = commit.message().unwrap_or("").trim().to_string();
+    Ok(VersionInfo { id, label, size: 0 })
+}
+
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------
@@ -63,30 +118,15 @@ fn now_label() -> String {
 pub async fn create_version(tmp_path: String) -> Result<VersionInfo, String> {
     tokio::task::spawn_blocking(move || {
         let data = data_dir(&tmp_path);
+        let repo = open_or_init(&data)?;
 
-        // Init git repo if needed
-        if !data.join(".git").exists() {
-            git(&data, &["init", "-b", "main"])
-                .or_else(|_| git(&data, &["init"]))?;
+        stage_all(&repo)?;
+
+        if has_staged_changes(&repo)? {
+            commit(&repo, &now_label())?;
         }
 
-        // Stage all changes
-        git(&data, &["add", "-A"])?;
-
-        // Only commit if the working tree changed
-        let status = git(&data, &["status", "--porcelain"])?;
-        if !status.is_empty() {
-            let label = now_label();
-            git(&data, &["commit", "-m", &label])?;
-        }
-
-        // Return current HEAD
-        let id = git(&data, &["rev-parse", "--short", "HEAD"])
-            .unwrap_or_default();
-        let label = git(&data, &["log", "-1", "--pretty=format:%s"])
-            .unwrap_or_default();
-
-        Ok(VersionInfo { id, label, size: 0 })
+        head_info(&repo)
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?
@@ -96,27 +136,32 @@ pub async fn create_version(tmp_path: String) -> Result<VersionInfo, String> {
 pub async fn list_versions(tmp_path: String) -> Result<Vec<VersionInfo>, String> {
     tokio::task::spawn_blocking(move || {
         let data = data_dir(&tmp_path);
-
         if !data.join(".git").exists() {
             return Ok(Vec::new());
         }
 
-        let output = match git(&data, &["log", "--pretty=format:%h %s"]) {
-            Ok(o) => o,
-            Err(_) => return Ok(Vec::new()),
-        };
+        let repo = Repository::open(&data).map_err(|e| e.to_string())?;
+        if repo.head().is_err() {
+            return Ok(Vec::new());
+        }
 
-        Ok(output
-            .lines()
-            .filter_map(|line| {
-                let (id, label) = line.split_once(' ')?;
-                Some(VersionInfo {
-                    id: id.to_string(),
-                    label: label.to_string(),
-                    size: 0,
-                })
+        let mut revwalk = repo.revwalk().map_err(|e| e.to_string())?;
+        revwalk.push_head().map_err(|e| e.to_string())?;
+        revwalk
+            .set_sorting(Sort::TIME)
+            .map_err(|e| e.to_string())?;
+
+        let versions = revwalk
+            .filter_map(|oid| {
+                let oid = oid.ok()?;
+                let commit = repo.find_commit(oid).ok()?;
+                let id = oid.to_string()[..7].to_string();
+                let label = commit.message().unwrap_or("").trim().to_string();
+                Some(VersionInfo { id, label, size: 0 })
             })
-            .collect())
+            .collect();
+
+        Ok(versions)
     })
     .await
     .map_err(|e| format!("Task join error: {}", e))?
@@ -126,8 +171,12 @@ pub async fn list_versions(tmp_path: String) -> Result<Vec<VersionInfo>, String>
 pub async fn restore_version(tmp_path: String, version_id: String) -> Result<(), String> {
     tokio::task::spawn_blocking(move || {
         let data = data_dir(&tmp_path);
-        // Reset working tree and HEAD to the target commit
-        git(&data, &["reset", "--hard", &version_id])?;
+        let repo = Repository::open(&data).map_err(|e| e.to_string())?;
+        let obj = repo
+            .revparse_single(&version_id)
+            .map_err(|e| e.to_string())?;
+        repo.reset(&obj, ResetType::Hard, None)
+            .map_err(|e| e.to_string())?;
         Ok(())
     })
     .await
