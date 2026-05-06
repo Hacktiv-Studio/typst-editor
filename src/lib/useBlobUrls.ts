@@ -16,7 +16,9 @@ export function useBlobUrls(pages: string[]): string[] {
     } else {
       if (old[i]) toRevoke.push(old[i]);
       urls.push(
-        URL.createObjectURL(new Blob([pages[i]], { type: "image/svg+xml" })),
+        pages[i]
+          ? URL.createObjectURL(new Blob([pages[i]], { type: "image/svg+xml" }))
+          : "",
       );
     }
   }

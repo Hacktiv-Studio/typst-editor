@@ -152,12 +152,16 @@ export function PagesViewer() {
             }).catch(() => {})
           }}
         >
-          <img
-            src={url}
-            alt={`Page ${i + 1}`}
-            className="w-full h-auto block bg-white"
-            draggable={false}
-          />
+          {url ? (
+            <img
+              src={url}
+              alt={`Page ${i + 1}`}
+              className="w-full h-auto block bg-white"
+              draggable={false}
+            />
+          ) : (
+            <div className="w-full bg-white" style={{ aspectRatio: '1 / 1.414' }} />
+          )}
           <div className="absolute -bottom-5 left-1/2 -translate-x-1/2 text-[9px] text-[#585b70] whitespace-nowrap">
             Page {i + 1}
           </div>

@@ -103,8 +103,8 @@ export const useAppStore = create<AppState>()(
       setPages: (pages) => set({ pages }),
       applyPagesDelta: (pageCount, updates, hasErrors = false) =>
         set((s) => {
-          if (pageCount === 0 && updates.length === 0 && hasErrors) return s; // compile error: keep current pages
-          if (updates.length === 0 && pageCount === s.pages.length) return s; // nothing changed
+          if (pageCount === 0 && !hasErrors) return { pages: [] }; // empty document: clear preview
+          if (updates.length === 0) return s; // compile error or nothing changed: keep current pages
           const pages =
             pageCount !== s.pages.length
               ? Array(pageCount).fill("")
