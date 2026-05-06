@@ -215,6 +215,11 @@ export function Sidebar() {
     await exportProject(tmpPath, entryFile, format, outPath as string);
   }
 
+  function currentStem(): string {
+    if (typzPath) return typzPath.replace(/\\/g, "/").split("/").pop()!.replace(/\.typz$/i, "");
+    return entryFile.replace(/\.typ$/i, "");
+  }
+
   async function handleSave() {
     if (!tmpPath) return;
     if (typzPath) {
@@ -226,13 +231,21 @@ export function Sidebar() {
       await saveProject(tmpPath, typzPath);
       createVersion(tmpPath).catch(() => {});
     } else {
-      await handleSaveAs();
+      const outPath = await save({
+        defaultPath: `${currentStem()}.typz`,
+        filters: [{ name: "Typst Project", extensions: ["typz"] }],
+      });
+      if (!outPath) return;
+      setTypzPath(outPath as string);
+      addRecentProject(outPath as string);
+      await saveProject(tmpPath, outPath as string);
     }
   }
 
   async function handleSaveAs() {
     if (!tmpPath) return;
     const outPath = await save({
+      defaultPath: `${currentStem()} (copie).typz`,
       filters: [{ name: "Typst Project", extensions: ["typz"] }],
     });
     if (!outPath) return;
