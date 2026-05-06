@@ -23,6 +23,17 @@ export const fr = {
   "sidebar.search": "Rechercher dans les fichiers (Ctrl+Shift+F)",
   "sidebar.history": "Historique des versions",
   "sidebar.recentProjects": "Projets récents",
+  "sidebar.settings": "Paramètres",
+  "sidebar.saveMenu": "Enregistrer",
+  "sidebar.saveAsFull": "Enregistrer sous…",
+  // Settings modal
+  "settings.title": "Paramètres",
+  "settings.sectionInterface": "Interface",
+  "settings.language": "Langue",
+  "settings.langFr": "Français",
+  "settings.langEn": "English",
+  "settings.sectionCompilation": "Compilation",
+  "settings.comingSoon": "Bientôt disponible",
 
   // Projets récents
   "recent.title": "Projets récents",
@@ -136,6 +147,17 @@ export const en: Record<TranslationKey, string> = {
   "sidebar.search": "Search in files (Ctrl+Shift+F)",
   "sidebar.history": "Version history",
   "sidebar.recentProjects": "Recent projects",
+  "sidebar.settings": "Settings",
+  "sidebar.saveMenu": "Save",
+  "sidebar.saveAsFull": "Save As…",
+  // Settings modal
+  "settings.title": "Settings",
+  "settings.sectionInterface": "Interface",
+  "settings.language": "Language",
+  "settings.langFr": "Français",
+  "settings.langEn": "English",
+  "settings.sectionCompilation": "Compilation",
+  "settings.comingSoon": "Coming soon",
 
   // Recent projects
   "recent.title": "Recent projects",
