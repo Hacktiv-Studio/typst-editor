@@ -91,6 +91,8 @@ function PreviewView({ tmpPath, version, fullscreen, onToggleFullscreen, onBack,
       <div className="flex-1 overflow-auto bg-[#11111b] flex flex-col items-center justify-center gap-4 p-6">
         {loading ? (
           <div className="text-[#585b70] text-xs">Compilation en cours…</div>
+        ) : pages.length === 0 ? (
+          <div className="w-full max-w-[400px] shadow-2xl bg-white rounded-sm" style={{ aspectRatio: '1 / 1.414' }} />
         ) : !svgUrl ? (
           <div className="text-[#585b70] text-xs">Aperçu indisponible</div>
         ) : (
